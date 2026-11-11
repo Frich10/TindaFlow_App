@@ -6,7 +6,7 @@ const _monthsLong = [
 
 /// ₱1,234 (whole numbers) or ₱1,234.50. Pass [decimals] to always show 2 decimals.
 String peso(num value, {bool decimals = false}) { 
-  final v = value.toDouble();
+  final v = value.toDouble(); 
   final neg = v < 0; 
   final a = v.abs();
   final showDecimals = decimals || a != a.roundToDouble();
