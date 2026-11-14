@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-const kBlue = Color(0xFF0B6EFD);
+const kBlue = Color(0xFF0B6EFD); 
 const kBlueDark = Color(0xFF0A4FA8);
 const kText = Color(0xFF0B3C85);
 const kMuted = Color(0xFF8A9BB5);
 const kBg = Color(0xFFF4F9FD);
 const kGreen = Color(0xFF1FA84C);
-const kRed = Color(0xFFEF4444);
+const kRed = Color(0xFFEF4444);  
 const kOrange = Color(0xFFFF8A1F);
 const kPurple = Color(0xFF8B5CF6);
 const kFieldBorder = Color(0xFF4C9AFF);
