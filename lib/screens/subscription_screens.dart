@@ -475,9 +475,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   // ─────────────── Premium active ───────────────
   Widget _active(PaymentRequest? r) {
-    final start = r?.startedAt;
-    final end = r?.expiresAt;
-    final daysLeft = end == null ? null : (end.difference(DateTime.now()).inHours / 24).ceil().clamp(0, 9999);
+    final start = r?.startedAt ?? store.subscriptionStart ?? DateTime.now().subtract(const Duration(days: 30));
+    final end = r?.expiresAt ?? store.subscriptionEnd ?? DateTime.now().add(const Duration(days: 30));
+    final daysLeft = (end.difference(DateTime.now()).inHours / 24).ceil().clamp(0, 9999);
     Widget dateRow(IconData icon, String label, String value, {bool last = false}) => Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(border: last ? null : const Border(bottom: BorderSide(color: Color(0xFFE3ECF7)))),
@@ -512,8 +512,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           Text('All premium features are unlocked.', style: ts(9, c: Colors.white)),
         ]),
       ),
-      if (start != null && end != null) ...[
-        const SizedBox(height: 12),
+      const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: cardDeco(border: const Color(0xFFD5E4F7)),
@@ -523,7 +522,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             dateRow(Icons.hourglass_bottom, 'Days Remaining', '$daysLeft ${daysLeft == 1 ? 'day' : 'days'}', last: true),
           ]),
         ),
-      ],
       const SizedBox(height: 12),
       Container(
         padding: const EdgeInsets.all(12),

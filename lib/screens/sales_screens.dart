@@ -43,12 +43,9 @@ class _SalesTabState extends State<SalesTab> {
             child: ChipsRow(
               options: [
                 'All',
-                ...kProductCategories.where((c) => c != 'Others'),
                 ...store.products
                     .map((p) => p.category)
-                    .where((c) =>
-                        c != 'Others' &&
-                        !kProductCategories.contains(c))
+                    .where((c) => c.trim().isNotEmpty)
                     .toSet()
                     .toList()
                   ..sort(),

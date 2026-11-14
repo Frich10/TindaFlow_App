@@ -35,6 +35,11 @@ class Activity {
 }
 
 /// Single source of truth for the whole app. Persists to SharedPreferences.
+
+Map<String, dynamic> _toStringDynamicMap(Map<Object?, Object?> map) {
+  return map.map((k, v) => MapEntry(k.toString(), v));
+}
+
 class AppStore extends ChangeNotifier {
   SharedPreferences? _prefs;
 
@@ -49,6 +54,10 @@ class AppStore extends ChangeNotifier {
   BusinessProfile profile = BusinessProfile();
   double gcashOpening = 0;
   String plan = 'Free';
+  DateTime? subscriptionStart;
+  DateTime? subscriptionEnd;
+  DateTime? lastAlertViewed;
+  String? lastAlertHash;
 
   List<Product> products = [];
   List<StockMove> moves = [];
@@ -100,6 +109,10 @@ class AppStore extends ChangeNotifier {
     profile = BusinessProfile.fromJson((j['profile'] as Map<String, dynamic>?) ?? {});
     gcashOpening = ((j['gcashOpening'] as num?) ?? 0).toDouble();
     plan = (j['plan'] as String?) ?? 'Free';
+    subscriptionStart = j['subscriptionStart'] == null ? null : DateTime.parse(j['subscriptionStart'] as String);
+    subscriptionEnd = j['subscriptionEnd'] == null ? null : DateTime.parse(j['subscriptionEnd'] as String);
+    lastAlertViewed = j['lastAlertViewed'] == null ? null : DateTime.parse(j['lastAlertViewed'] as String);
+    lastAlertHash = j['lastAlertHash'] as String?;
     products = _list(j['products'], Product.fromJson);
     moves = _list(j['moves'], StockMove.fromJson);
     sales = _list(j['sales'], Sale.fromJson);
@@ -115,12 +128,17 @@ class AppStore extends ChangeNotifier {
     if (_syncingFromCloud) return;
     _syncingFromCloud = true;
     try {
+      if (j.containsKey('account') && j['account'] is Map) {
+        account = Account.fromJson(_toStringDynamicMap(j['account'] as Map<Object?, Object?>));
+      }
       if (j.containsKey('profile') && j['profile'] is Map) {
-        profile = BusinessProfile.fromJson(Map<String, dynamic>.from(j['profile'] as Map));
+        profile = BusinessProfile.fromJson(_toStringDynamicMap(j['profile'] as Map<Object?, Object?>));
       }
       if (j.containsKey('plan')) {
         plan = (j['plan'] as String?) ?? 'Free';
       }
+      subscriptionStart = j['subscriptionStart'] == null ? null : DateTime.parse(j['subscriptionStart'] as String);
+      subscriptionEnd = j['subscriptionEnd'] == null ? null : DateTime.parse(j['subscriptionEnd'] as String);
       gcashOpening = ((j['gcashOpening'] as num?) ?? 0).toDouble();
       products = _fromFirebase(j['products'], Product.fromJson);
       sales = _fromFirebase(j['sales'], Sale.fromJson)
@@ -146,13 +164,13 @@ class AppStore extends ChangeNotifier {
     if (raw is Map) {
       return raw.values
           .whereType<Map>()
-          .map((e) => fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => fromJson(_toStringDynamicMap(e as Map<Object?, Object?>)))
           .toList();
     }
     if (raw is List) {
       return raw
           .whereType<Map>()
-          .map((e) => fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => fromJson(_toStringDynamicMap(e as Map<Object?, Object?>)))
           .toList();
     }
     return [];
@@ -167,6 +185,10 @@ class AppStore extends ChangeNotifier {
         'profile': profile.toJson(),
         'gcashOpening': gcashOpening,
         'plan': plan,
+        'subscriptionStart': subscriptionStart?.toIso8601String(),
+        'subscriptionEnd': subscriptionEnd?.toIso8601String(),
+        'lastAlertViewed': lastAlertViewed?.toIso8601String(),
+        'lastAlertHash': lastAlertHash,
         'products': products.map((e) => e.toJson()).toList(),
         'moves': moves.map((e) => e.toJson()).toList(),
         'sales': sales.map((e) => e.toJson()).toList(),
@@ -573,9 +595,32 @@ class AppStore extends ChangeNotifier {
     return debts.where((d) => !d.paid && d.dueDate.isBefore(limit)).toList();
   }
 
-  bool get hasAlerts => lowStockProducts.isNotEmpty || dueDebts.isNotEmpty;
+  String _computeAlertHash() {
+    final lowIds = lowStockProducts.map((p) => p.id).toList()..sort();
+    final dueIds = dueDebts.map((d) => d.id).toList()..sort();
+    return '${lowIds.join(',')}|${dueIds.join(',')}';
+  }
+
+  bool get hasAlerts {
+    final low = lowStockProducts;
+    final due = dueDebts;
+    if (low.isEmpty && due.isEmpty) return false;
+    final currentHash = _computeAlertHash();
+    return lastAlertHash != currentHash;
+  }
+
+  void markAlertsViewed() {
+    lastAlertViewed = DateTime.now();
+    lastAlertHash = _computeAlertHash();
+    _commit();
+  }
 
   void setPlan(String p) {
+    if (p == 'Premium' && plan != 'Premium') {
+      final now = DateTime.now();
+      subscriptionStart = now;
+      subscriptionEnd = now.add(const Duration(days: 30));
+    }
     plan = p;
     _commit();
   }

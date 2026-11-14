@@ -1,8 +1,7 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
+import '../data/otp_service.dart';
 import '../data/store.dart';
 import '../widgets/common.dart';
 import 'shell.dart';
@@ -301,7 +300,26 @@ class _LoginScreenState extends State<LoginScreen> {
       snack(context, 'Incorrect username, email or password, or account not found.');
       return;
     }
-    _enterApp(context);
+    // Show loading animation before entering app
+    await _showLoadingAndEnter();
+  }
+
+  Future<void> _showLoadingAndEnter() async {
+    final overlay = Overlay.of(context);
+    final navigator = Navigator.of(context);
+    final entry = OverlayEntry(
+      builder: (c) => Positioned.fill(
+        child: Material(
+          color: Colors.black54,
+          child: Center(child: CircularProgressIndicator(color: kBlue, strokeWidth: 3)),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    await Future.delayed(const Duration(milliseconds: 800));
+    entry.remove();
+    if (!mounted) return;
+    navigator.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const MainShell()), (r) => false);
   }
 
   void _forgot() {
@@ -321,11 +339,11 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Form(
           key: _key,
           child: Column(children: [
-            AppField(label: 'Username', showLabel: false, controller: _user, hint: 'Username', icon: Icons.person_outline),
-            AppField(label: 'Email', showLabel: false, controller: _email, hint: 'Email Address', icon: Icons.mail_outline, keyboard: TextInputType.emailAddress, validator: emailError),
+            AppField(label: 'Username', showLabel: false, controller: _user, hint: 'Username', icon: Icons.person_outline, bottomGap: 6),
+            AppField(label: 'Email', showLabel: false, controller: _email, hint: 'Email Address', icon: Icons.mail_outline, keyboard: TextInputType.emailAddress, validator: emailError, bottomGap: 6),
             AppField(
               label: 'Password', showLabel: false, controller: _pass, hint: 'Password', icon: Icons.lock_outline,
-              obscure: _hide, bottomGap: 4,
+              obscure: _hide, bottomGap: 2,
               suffix: IconButton(
                 icon: Icon(_hide ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18, color: kMuted),
                 onPressed: () => setState(() => _hide = !_hide),
@@ -341,7 +359,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Spacer(),
               GestureDetector(onTap: _forgot, child: Text('Forgot Password?', style: ts(10, w: FontWeight.w600))),
             ]),
-            const SizedBox(height: 12),
+            const SizedBox(height: 5),
             AppButton(
               _loading ? 'Logging in...' : 'Login',
               height: 42,
@@ -354,7 +372,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     )
                   : null,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             Text.rich(
               TextSpan(text: "Don't have an account? ", style: ts(10, w: FontWeight.w600), children: [
                 WidgetSpan(
@@ -386,8 +404,8 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   final _emailCtrl = TextEditingController();
   final _otpCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  String? _code;
   bool _loading = false;
+  bool _hidePass = true;
 
   @override
   void dispose() {
@@ -398,64 +416,86 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   }
 
   Future<void> _sendOtp() async {
-    final email = _emailCtrl.text.trim();
-    if (email.isEmpty) {
-      snack(context, 'Enter your registered email.');
+    final err = emailError(_emailCtrl.text);
+    if (err != null) {
+      snack(context, err);
       return;
     }
     setState(() => _loading = true);
-    _code = (1000 + Random().nextInt(9000)).toString();
-    await Future.delayed(const Duration(milliseconds: 300));
+    final res = await otpService.sendOtp(_emailCtrl.text);
     if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _step = 1;
-    });
-    await showDialog<void>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('OTP Code'),
-        content: SelectableText(_code!, style: ts(24, w: FontWeight.w700)),
-        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-      ),
-    );
-    snack(context, 'OTP sent to $email.');
-  }
-
-  void _verifyOtp() {
-    if (_otpCtrl.text.trim() != _code) {
-      snack(context, 'Invalid OTP code.');
+    setState(() => _loading = false);
+    if (!res.ok) {
+      snack(context, res.message);
       return;
     }
-    setState(() => _step = 2);
+    setState(() {
+      _step = 1;
+    });
+    snack(context, 'If that email is registered, a code has been sent.');
   }
 
-  Future<void> _reset() async {
+  Future<void> _verifyOtp() async {
+    if (_otpCtrl.text.trim().length < 6) {
+      snack(context, 'Enter the 6-digit code from your email.');
+      return;
+    }
     final err = passwordError(_passCtrl.text);
     if (err != null) {
       snack(context, err);
       return;
     }
     setState(() => _loading = true);
-    final ok = await store.resetPasswordAsync(_emailCtrl.text, _passCtrl.text);
+    final res = await otpService.verifyOtpAndReset(
+      email: _emailCtrl.text,
+      code: _otpCtrl.text,
+      newPassword: _passCtrl.text,
+    );
     if (!mounted) return;
     setState(() => _loading = false);
+    if (!res.ok) {
+      snack(context, res.message);
+      return;
+    }
     Navigator.pop(context);
-    snack(context, ok ? 'Password updated. You can log in now.' : 'No account found with that email.');
+    snack(context, res.message);
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: Colors.white,
-      title: Text('Reset password', style: ts(15, w: FontWeight.w700)),
+      title: Text(_step == 0 ? 'Forgot password' : 'Reset password', style: ts(15, w: FontWeight.w700)),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        if (_step == 0)
-          AppField(label: 'Account email', controller: _emailCtrl, hint: 'Email Address', icon: Icons.mail_outline, required: false, bottomGap: 0),
-        if (_step == 1)
-          AppField(label: 'OTP code', controller: _otpCtrl, hint: 'Enter OTP', icon: Icons.password, required: false, bottomGap: 0),
-        if (_step == 2)
-          AppField(label: 'New password', controller: _passCtrl, hint: 'At least 8 chars, number, capital', icon: Icons.lock_outline, obscure: true, required: false, bottomGap: 0),
+        if (_step == 0) ...[
+          Text(
+            'Enter the email registered to your TindaFlow account and we will send you a 6-digit code.',
+            style: ts(10, c: kMuted),
+          ),
+          const SizedBox(height: 8),
+          AppField(label: 'Account email', controller: _emailCtrl, hint: 'Email Address', icon: Icons.mail_outline, keyboard: TextInputType.emailAddress, required: false, bottomGap: 4),
+        ],
+        if (_step == 1) ...[
+          Text(
+            'We sent a 6-digit code to ${_emailCtrl.text.trim()}. Enter it below, then set a new password.',
+            style: ts(10, c: kMuted),
+          ),
+          const SizedBox(height: 8),
+          AppField(label: 'OTP code', controller: _otpCtrl, hint: 'Enter the 6-digit code', icon: Icons.password, keyboard: TextInputType.number, required: false, bottomGap: 4),
+          AppField(
+            label: 'New password',
+            controller: _passCtrl,
+            hint: 'At least 8 chars, number, capital',
+            icon: Icons.lock_outline,
+            obscure: _hidePass,
+            required: false,
+            bottomGap: 4,
+            suffix: IconButton(
+              icon: Icon(_hidePass ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 18, color: kMuted),
+              onPressed: () => setState(() => _hidePass = !_hidePass),
+            ),
+          ),
+        ],
       ]),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
@@ -463,11 +503,13 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
           onPressed: _loading
               ? null
               : () {
-                  if (_step == 0) _sendOtp();
-                  else if (_step == 1) _verifyOtp();
-                  else _reset();
+                  if (_step == 0) {
+                    _sendOtp();
+                  } else {
+                    _verifyOtp();
+                  }
                 },
-          child: Text(_loading ? 'Please wait...' : (_step == 0 ? 'Send OTP' : (_step == 1 ? 'Verify' : 'Reset'))),
+          child: Text(_loading ? 'Please wait...' : (_step == 0 ? 'Send code' : 'Reset password')),
         ),
       ],
     );
@@ -503,17 +545,10 @@ class _SignupScreenState extends State<SignupScreen> {
       snack(context, 'Please agree to the terms and conditions.');
       return;
     }
-    if (store.hasAccount) {
-      final replace = await confirmDelete(
-        context,
-        title: 'Replace existing account?',
-        message: 'An account already exists on this device. Creating a new one will replace it and its data.',
-      );
-      if (!replace) return;
-    }
     await store.signUp(fullName: _name.text, username: _user.text, email: _email.text, password: _pass.text);
     if (!mounted) return;
-    _enterApp(context);
+    snack(context, 'Account created! Please log in.');
+    Navigator.of(context).maybePop();
   }
 
   @override
@@ -526,9 +561,9 @@ class _SignupScreenState extends State<SignupScreen> {
         child: Form(
           key: _key,
           child: Column(children: [
-            AppField(label: 'Full name', showLabel: false, controller: _name, hint: 'Full name', icon: Icons.person_outline),
-            AppField(label: 'Username', showLabel: false, controller: _user, hint: 'Username', icon: Icons.person_outline),
-            AppField(label: 'Email', showLabel: false, controller: _email, hint: 'Email Address', icon: Icons.mail_outline, keyboard: TextInputType.emailAddress, validator: emailError),
+            AppField(label: 'Full name', showLabel: false, controller: _name, hint: 'Full name', icon: Icons.person_outline, bottomGap: 6),
+            AppField(label: 'Username', showLabel: false, controller: _user, hint: 'Username', icon: Icons.person_outline, bottomGap: 6),
+            AppField(label: 'Email', showLabel: false, controller: _email, hint: 'Email Address', icon: Icons.mail_outline, keyboard: TextInputType.emailAddress, validator: emailError, bottomGap: 6),
             AppField(
               label: 'Password', showLabel: false, controller: _pass, hint: 'Password', icon: Icons.lock_outline,
               obscure: _hide, validator: passwordError, bottomGap: 4,
@@ -545,9 +580,9 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
               Text('I agree to the terms and conditions', style: ts(10, w: FontWeight.w600)),
             ]),
-            const SizedBox(height: 12),
+            const SizedBox(height: 5),
             AppButton('Sign up', height: 42, onPressed: _submit),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             Text.rich(
               TextSpan(text: 'Already have an account? ', style: ts(10, w: FontWeight.w600), children: [
                 WidgetSpan(

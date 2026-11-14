@@ -39,7 +39,7 @@ class _DebtTabState extends State<DebtTab> {
       }).toList();
       return BluePage(
         title: 'Debt',
-        actions: [HeaderIcon(Icons.notifications, badge: store.hasAlerts, onTap: () => showAlerts(context))],
+        actions: [Watch((context) => HeaderIcon(Icons.notifications, badge: store.hasAlerts, onTap: () => showAlerts(context)))],
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),

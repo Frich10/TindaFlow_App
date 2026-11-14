@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
-import '../data/firebase_sync.dart';
 import '../data/store.dart';
 import '../data/subscription_service.dart';
 import '../widgets/common.dart';
@@ -89,6 +88,8 @@ class _NavBar extends StatelessWidget {
 
 // ───────────────────────── Home ─────────────────────────
 
+void _go(BuildContext context, Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
+
 class HomeTab extends StatelessWidget {
   const HomeTab({super.key});
 
@@ -102,40 +103,35 @@ class HomeTab extends StatelessWidget {
         header: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 6, 14),
           child: Row(children: [
-            
-        Builder(
-          builder: (context) {
-            final photo = store.profile.photo;
-
-            if (photo != null && photo.isNotEmpty) {
-              return ClipOval(
-                child: Image.memory(
-                  decodeImg(photo),
-                  width: 36,
-                  height: 36,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                ),
-              );
-            }
-
-            return Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                shape: BoxShape.circle,
+            GestureDetector(
+              onTap: () => _go(context, const ProfileTab()),
+              child: Builder(
+                builder: (context) {
+                  final photo = store.profile.photo;
+                  if (photo != null && photo.isNotEmpty) {
+                    return ClipOval(
+                      child: Image.memory(
+                        decodeImg(photo),
+                        width: 36,
+                        height: 36,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      ),
+                    );
+                  }
+                  return Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.person, color: Colors.white, size: 22),
+                  );
+                },
               ),
-              child: const Icon(
-                Icons.person,
-                color: Colors.white,
-                size: 22,
-              ),
-            );
-          },
-        ),
-
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -143,7 +139,7 @@ class HomeTab extends StatelessWidget {
                 Text('Good day! Keep it up!', style: ts(9.5, c: Colors.white70)),
               ]),
             ),
-            HeaderIcon(Icons.notifications, badge: store.hasAlerts, onTap: () => showAlerts(context)),
+            Watch((context) => HeaderIcon(Icons.notifications, badge: store.hasAlerts, onTap: () => showAlerts(context))),
           ]),
         ),
         child: ListView(

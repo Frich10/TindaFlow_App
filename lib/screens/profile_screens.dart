@@ -1,4 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../core/theme.dart';
 import '../data/models.dart';
@@ -97,7 +105,7 @@ class ProfileTab extends StatelessWidget {
                 Text('${p.businessType} Owner', style: ts(10, c: Colors.white70)),
               ]),
             ),
-            HeaderIcon(Icons.edit, onTap: () => _go(context, const ProfileFormScreen(mode: ProfileMode.edit))),
+            HeaderIcon(Icons.edit, onTap: () => _go(context, const ProfileFormScreen(mode: ProfileMode.account))),
           ]),
         ),
         child: Column(children: [
@@ -176,12 +184,19 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
   final _store = TextEditingController(text: store.profile.storeName);
   final _phone = TextEditingController(text: store.profile.phone);
   final _addr = TextEditingController(text: store.profile.address);
+  final _city = TextEditingController(text: store.profile.city);
+  final _province = TextEditingController(text: store.profile.province);
+  final _postalCode = TextEditingController(text: store.profile.postalCode);
+  final _tin = TextEditingController(text: store.profile.tinNumber);
   final _email = TextEditingController(text: store.account?.email ?? '');
+  final _dob = TextEditingController(text: store.account?.dateOfBirth ?? '');
+  final _gender = TextEditingController(text: store.account?.gender ?? '');
+  final _customBusinessType = TextEditingController();
   late String _type = kBusinessTypes.contains(store.profile.businessType) ? store.profile.businessType : kBusinessTypes.first;
 
   @override
   void dispose() {
-    for (final c in [_owner, _store, _phone, _addr, _email]) {
+    for (final c in [_owner, _store, _phone, _addr, _city, _province, _postalCode, _tin, _email, _dob, _gender, _customBusinessType]) {
       c.dispose();
     }
     super.dispose();
@@ -191,13 +206,21 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     if (!_key.currentState!.validate()) return;
     final p = store.profile;
     p.storeName = _store.text.trim();
-    p.businessType = _type;
+    p.businessType = _type == 'Others' ? _customBusinessType.text.trim() : _type;
     p.phone = _phone.text.trim();
+    p.address = _addr.text.trim();
+    p.city = _city.text.trim();
+    p.province = _province.text.trim();
+    p.postalCode = _postalCode.text.trim();
+    p.tinNumber = _tin.text.trim();
     if (widget.mode != ProfileMode.account) {
       p.ownerName = _owner.text.trim();
-      p.address = _addr.text.trim();
     } else {
       store.updateEmail(_email.text);
+      if (store.account != null) {
+        store.account!.dateOfBirth = _dob.text.trim().isEmpty ? null : _dob.text.trim();
+        store.account!.gender = _gender.text.trim().isEmpty ? null : _gender.text.trim();
+      }
     }
     store.saveProfile();
     snack(context, 'Saved');
@@ -223,6 +246,18 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     }
   }
 
+  Future<void> _pickDate(BuildContext context, TextEditingController controller) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().subtract(const Duration(days: 365 * 20)),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      controller.text = picked.toIso8601String().split('T').first;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final m = widget.mode;
@@ -236,52 +271,65 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
       items: kBusinessTypes,
       value: _type,
       onChanged: (v) => setState(() => _type = v ?? _type),
+      bottomGap: 6,
     );
-    final phone = AppField(label: 'Phone Number', controller: _phone, hint: '09XXXXXXXXX', icon: null, keyboard: TextInputType.phone, validator: phoneError);
-    final addr = AppField(label: 'Address', controller: _addr, hint: 'Store address', icon: Icons.location_on, maxLines: 2);
+    final phone = AppField(label: 'Phone Number', controller: _phone, hint: '09XXXXXXXXX', icon: null, keyboard: TextInputType.phone, validator: phoneError, bottomGap: 6);
+    final addr = AppField(label: 'Business Address', controller: _addr, hint: 'Store address', icon: Icons.location_on, maxLines: 2, bottomGap: 6);
+    final city = AppField(label: 'City / Municipality', controller: _city, hint: 'City / Municipality', icon: Icons.location_city, bottomGap: 6);
+    final province = AppField(label: 'Province', controller: _province, hint: 'Province', icon: Icons.map, bottomGap: 6);
+    final postalCode = AppField(label: 'Postal Code', controller: _postalCode, hint: 'Postal Code', icon: Icons.mark_email_unread_outlined, keyboard: TextInputType.number, bottomGap: 6);
+    final tin = AppField(label: 'TIN Number (Optional)', controller: _tin, hint: 'Tax Identification Number', icon: Icons.receipt_long, required: false, bottomGap: 6);
+    final dob = AppField(
+      label: 'Date of Birth',
+      controller: _dob,
+      hint: 'YYYY-MM-DD',
+      icon: Icons.cake_outlined,
+      readOnly: true,
+      onTap: () => _pickDate(context, _dob),
+      bottomGap: 6,
+    );
+    final genderDropdown = AppDropdown(
+      label: 'Gender',
+      items: ['Male', 'Female', 'Other', 'Prefer not to say'],
+      value: _gender.text.isEmpty ? null : _gender.text,
+      onChanged: (v) => setState(() => _gender.text = v ?? ''),
+      bottomGap: 6,
+    );
 
     final List<Widget> fields;
     switch (m) {
-      case ProfileMode.edit:
+case ProfileMode.edit:
         fields = [
           Container(
             padding: const EdgeInsets.all(12),
             decoration: cardDeco(color: kGreenTint, r: 10),
             child: Row(children: [
-              
-            Builder(
-              builder: (context) {
-                final photo = store.profile.photo;
-
-                if (photo != null && photo.isNotEmpty) {
-                  return ClipOval(
-                    child: Image.memory(
-                      decodeImg(photo),
-                      width: 38,
-                      height: 38,
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
+              Builder(
+                builder: (context) {
+                  final photo = store.profile.photo;
+                  if (photo != null && photo.isNotEmpty) {
+                    return ClipOval(
+                      child: Image.memory(
+                        decodeImg(photo),
+                        width: 38,
+                        height: 38,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      ),
+                    );
+                  }
+                  return Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: kBlue.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
                     ),
+                    child: const Icon(Icons.person, color: Colors.white, size: 23),
                   );
-                }
-
-                return Container(
-                  width: 38,
-                  height: 38,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: kBlue.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.person,
-                    color: Colors.white,
-                    size: 23,
-                  ),
-                );
-              },
-            ),
-
+                },
+              ),
               const SizedBox(width: 10),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(store.profile.storeName, style: ts(12, w: FontWeight.w700, c: kBlue)),
@@ -290,65 +338,74 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
             ]),
           ),
           const SizedBox(height: 16),
-          AppField(label: 'Business Owner Name', controller: _owner, hint: 'Owner name'),
-          AppField(label: 'Store Name', controller: _store, hint: 'Store name'),
+          AppField(label: 'Business Owner Name', controller: _owner, hint: 'Owner name', bottomGap: 6),
+          AppField(label: 'Store Name', controller: _store, hint: 'Store name', bottomGap: 6),
           typeDropdown,
+          if (_type == 'Others')
+            AppField(label: 'Specify Business Type', controller: _customBusinessType, hint: 'Enter business type', icon: Icons.business, bottomGap: 6),
           phone,
           addr,
         ];
       case ProfileMode.business:
         fields = [
+          // Business Details Section
           Center(child: Container(
             width: 54, height: 54,
             decoration: cardDeco(color: kBlueTint, r: 14),
             child: const Icon(Icons.storefront_rounded, color: kBlue, size: 32),
           )),
           const SizedBox(height: 14),
-          Text('Store Details', style: ts(13, w: FontWeight.w700, c: kBlue)),
+          Text('Business Details', style: ts(13, w: FontWeight.w700, c: kBlue)),
           const SizedBox(height: 10),
-          AppField(label: 'Store Name', controller: _store, hint: 'Store name'),
+          AppField(label: 'Store Name', controller: _store, hint: 'Store name', bottomGap: 6),
           typeDropdown,
-          AppField(label: 'Business Owner', controller: _owner, hint: 'Owner name'),
-          phone,
+          if (_type == 'Others')
+            AppField(label: 'Specify Business Type', controller: _customBusinessType, hint: 'Enter business type', icon: Icons.business, bottomGap: 6),
+          AppField(label: 'Business Owner', controller: _owner, hint: 'Owner name', bottomGap: 6),
+          tin,
+          const SizedBox(height: 8),
+          // Business Location Section
+          Text('Business Location', style: ts(13, w: FontWeight.w700, c: kBlue)),
+          const SizedBox(height: 10),
           addr,
+          city,
+          province,
+          postalCode,
         ];
       case ProfileMode.account:
         fields = [
           Center(
             child: Column(children: [
-            Builder(
-              builder: (context) {
-                final photo = store.profile.photo;
-
-                if (photo != null && photo.isNotEmpty) {
-                  return ClipOval(
-                    child: Image.memory(
-                      decodeImg(photo),
-                      width: 54,
-                      height: 54,
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
+              Builder(
+                builder: (context) {
+                  final photo = store.profile.photo;
+                  if (photo != null && photo.isNotEmpty) {
+                    return ClipOval(
+                      child: Image.memory(
+                        decodeImg(photo),
+                        width: 54,
+                        height: 54,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      ),
+                    );
+                  }
+                  return Container(
+                    width: 54,
+                    height: 54,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFDCEBFF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.person,
+                      color: Color(0xFF1468F5),
+                      size: 40,
                     ),
                   );
-                }
-
-                return Container(
-                  width: 54,
-                  height: 54,
-                  alignment: Alignment.center,
-                  decoration: const BoxDecoration(
-                  color: Color(0xFFDCEBFF),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.person,
-                  color: Color(0xFF1468F5),
-                  size: 40,
-                ),
-                );
-              },
-            ),
-
+                },
+              ),
               const SizedBox(height: 6),
               GestureDetector(
                 onTap: _changePhoto,
@@ -360,11 +417,24 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
               ),
             ]),
           ),
-          const SizedBox(height: 16),
-          AppField(label: 'Store Name', controller: _store, hint: 'Store name'),
-          typeDropdown,
+          const SizedBox(height: 14),
+          // Account Profile Section
+          Text('Account Profile', style: ts(13, w: FontWeight.w700, c: kBlue)),
+          const SizedBox(height: 8),
+          AppField(label: 'Full Name', controller: _owner, hint: 'Full name', bottomGap: 6),
+          AppField(label: 'Username', controller: TextEditingController(text: store.account?.username ?? ''), hint: 'Username', readOnly: true, bottomGap: 6),
+          dob,
+          genderDropdown,
+          const SizedBox(height: 6),
+          // Contact Information Section
+          Text('Contact Information', style: ts(13, w: FontWeight.w700, c: kBlue)),
+          const SizedBox(height: 10),
           phone,
-          AppField(label: 'Email Address', controller: _email, hint: 'Email Address', keyboard: TextInputType.emailAddress, validator: emailError),
+          AppField(label: 'Email Address', controller: _email, hint: 'Email Address', keyboard: TextInputType.emailAddress, validator: emailError, bottomGap: 6),
+          const SizedBox(height: 8),
+          // Account Security Section
+          Text('Account Security', style: ts(13, w: FontWeight.w700, c: kBlue)),
+          const SizedBox(height: 8),
           Material(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
@@ -385,30 +455,33 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
               ),
             ),
           ),
-           const SizedBox(height: 12),
-           Material(
-             color: Colors.white,
-             borderRadius: BorderRadius.circular(10),
-             child: InkWell(
-               borderRadius: BorderRadius.circular(10),
-               onTap: _clearData,
-               child: Container(
-                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                 decoration: cardDeco(color: Colors.transparent, border: kRed.withValues(alpha: 0.5)),
-                 child: Row(children: [
-                   const Icon(Icons.delete_sweep_outlined, size: 18, color: kRed),
-                   const SizedBox(width: 10),
-                   Expanded(
-                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                       Text('Clear All Data', style: ts(11, w: FontWeight.w600, c: kRed)),
-                       Text('Start fresh with an empty store', style: ts(8.5, c: kMuted)),
-                     ]),
-                   ),
-                 ]),
-               ),
-             ),
-           ),
-         ];
+          const SizedBox(height: 16),
+          // Reset Business Data Section
+          Text('Reset Business Data', style: ts(13, w: FontWeight.w700, c: kRed)),
+          const SizedBox(height: 10),
+          Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: _clearData,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: cardDeco(color: Colors.transparent, border: kRed.withValues(alpha: 0.5)),
+                child: Row(children: [
+                  const Icon(Icons.delete_sweep_outlined, size: 18, color: kRed),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Clear All Data', style: ts(11, w: FontWeight.w600, c: kRed)),
+                      Text('Start fresh with an empty store', style: ts(8.5, c: kMuted)),
+                    ]),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ];
      }
 
     return BluePage(
@@ -454,6 +527,49 @@ class GcashQrScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _downloadQr(BuildContext context) async {
+    final qr = store.profile.qr;
+    if (qr == null || qr.isEmpty) {
+      snack(context, 'No QR code to download.');
+      return;
+    }
+    if (kIsWeb) {
+      snack(context, 'Download not available on web. Use right-click → Save image.');
+      return;
+    }
+    final bytes = base64Decode(qr);
+    final result = await ImageGallerySaverPlus.saveImage(Uint8List.fromList(bytes), name: 'tindaflow_gcash_qr');
+    if (!context.mounted) return;
+    if (result['isSuccess'] == true) {
+      snack(context, 'QR code saved to gallery.');
+    } else {
+      snack(context, 'Failed to save QR code.');
+    }
+  }
+
+  Future<void> _shareQr(BuildContext context) async {
+    final qr = store.profile.qr;
+    if (qr == null || qr.isEmpty) {
+      snack(context, 'No QR code to share.');
+      return;
+    }
+    if (kIsWeb) {
+      snack(context, 'Sharing not available on web. Use right-click → Copy image.');
+      return;
+    }
+    final bytes = base64Decode(qr);
+    final tempFile = await _writeTempFile(bytes, 'gcash_qr.png');
+    if (!context.mounted) return;
+    await SharePlus.instance.share(ShareParams(files: [XFile(tempFile.path)], text: 'My GCash QR Code - ${store.profile.storeName}'));
+  }
+
+  Future<File> _writeTempFile(Uint8List bytes, String name) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$name');
+    await file.writeAsBytes(bytes);
+    return file;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Watch((context) {
@@ -478,7 +594,7 @@ class GcashQrScreen extends StatelessWidget {
                 ),
               ]),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: cardDeco(border: const Color(0xFFE3ECF7)),
@@ -487,11 +603,11 @@ class GcashQrScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(p.storeName, style: ts(13, w: FontWeight.w600, c: kBlue)),
                 Text(p.phone, style: ts(12, w: FontWeight.w600, c: kBlue)),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Row(children: [
-                  Expanded(child: _Mini(Icons.download, 'Download\nQR Code', () => snack(context, 'Download is not available yet.'))),
+                  Expanded(child: _Mini(Icons.download, 'Download\nQR Code', () => _downloadQr(context))),
                   const SizedBox(width: 10),
-                  Expanded(child: _Mini(Icons.share, 'Share QR\nCode', () => snack(context, 'Sharing is not available yet.'))),
+                  Expanded(child: _Mini(Icons.share, 'Share QR\nCode', () => _shareQr(context))),
                 ]),
               ]),
             ),

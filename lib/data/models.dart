@@ -4,12 +4,22 @@ String newId() => '${DateTime.now().microsecondsSinceEpoch}${_seq++}';
 DateTime _dt(dynamic v) => DateTime.parse(v as String);
 double _num(dynamic v) => (v as num).toDouble();
 
+Map<String, dynamic> _asStringMap(dynamic v) {
+  if (v is Map) {
+    return v.map((k, val) => MapEntry(k.toString(), _asStringMap(val)));
+  }
+  if (v is List) {
+    return v.asMap().map((k, val) => MapEntry(k.toString(), _asStringMap(val)));
+  }
+  return v;
+}
+
 const kCashIn = 'Cash In';
 const kCashOut = 'Cash Out';
 const kLowStock = 15;
 const kProductCategories = ['Canned Goods', 'Coffee', 'Chips', 'Candy', 'Drinks', 'Noodles', 'Snacks', 'Others'];
 const kExpenseCategories = ['Supplies', 'Utilities', 'Transportation', 'Groceries'];
-const kBusinessTypes = ['Sari-Sari Store', 'Merchandise', 'Bakery', 'Pharmacy', 'Food Stall', 'Other'];
+const kBusinessTypes = ['Sari-Sari Store', 'Merchandise', 'Food Stall', 'Others'];
 
 class Product {
   Product({
@@ -112,7 +122,7 @@ class Sale {
         method: j['method'] as String,
         total: _num(j['total']),
         received: _num(j['received']),
-        items: (j['items'] as List).map((e) => SaleItem.fromJson(e as Map<String, dynamic>)).toList(),
+        items: (j['items'] as List).map((e) => SaleItem.fromJson(_asStringMap(e))).toList(),
       );
 }
 
@@ -225,7 +235,7 @@ class Debt {
         paid: j['paid'] as bool,
         debtDate: _dt(j['debtDate']),
         dueDate: _dt(j['dueDate']),
-        items: (j['items'] as List).map((e) => DebtItem.fromJson(e as Map<String, dynamic>)).toList(),
+        items: (j['items'] as List).map((e) => DebtItem.fromJson(_asStringMap(e))).toList(),
       );
 }
 
@@ -236,19 +246,28 @@ class BusinessProfile {
     this.businessType = 'Sari-Sari Store',
     this.phone = '',
     this.address = '',
+    this.city = '',
+    this.province = '',
+    this.postalCode = '',
+    this.tinNumber = '',
     this.photo,
     this.qr,
   });
-  String ownerName;
-  String storeName;
-  String businessType;
-  String phone;
-  String address;
-  String? photo; // base64
-  String? qr; // base64
+  String ownerName = '';
+  String storeName = '';
+  String businessType = 'Sari-Sari Store';
+  String phone = '';
+  String address = '';
+  String city = '';
+  String province = '';
+  String postalCode = '';
+  String tinNumber = '';
+  String? photo;
+  String? qr;
   Map<String, dynamic> toJson() => {
         'ownerName': ownerName, 'storeName': storeName, 'businessType': businessType,
-        'phone': phone, 'address': address, 'photo': photo, 'qr': qr,
+        'phone': phone, 'address': address, 'city': city, 'province': province, 'postalCode': postalCode, 'tinNumber': tinNumber,
+        'photo': photo, 'qr': qr,
       };
   factory BusinessProfile.fromJson(Map<String, dynamic> j) => BusinessProfile(
         ownerName: (j['ownerName'] as String?) ?? '',
@@ -256,22 +275,30 @@ class BusinessProfile {
         businessType: (j['businessType'] as String?) ?? 'Sari-Sari Store',
         phone: (j['phone'] as String?) ?? '',
         address: (j['address'] as String?) ?? '',
+        city: (j['city'] as String?) ?? '',
+        province: (j['province'] as String?) ?? '',
+        postalCode: (j['postalCode'] as String?) ?? '',
+        tinNumber: (j['tinNumber'] as String?) ?? '',
         photo: j['photo'] as String?,
         qr: j['qr'] as String?,
       );
 }
 
 class Account {
-  Account({required this.fullName, required this.username, required this.email, required this.passHash});
+  Account({required this.fullName, required this.username, required this.email, required this.passHash, this.dateOfBirth, this.gender});
   String fullName;
   String username;
   String email;
   String passHash;
+  String? dateOfBirth;
+  String? gender;
   Map<String, dynamic> toJson() =>
-      {'fullName': fullName, 'username': username, 'email': email, 'passHash': passHash};
+      {'fullName': fullName, 'username': username, 'email': email, 'passHash': passHash, 'dateOfBirth': dateOfBirth, 'gender': gender};
   factory Account.fromJson(Map<String, dynamic> j) => Account(
       fullName: j['fullName'] as String,
       username: j['username'] as String,
       email: j['email'] as String,
-      passHash: j['passHash'] as String);
+      passHash: j['passHash'] as String,
+      dateOfBirth: j['dateOfBirth'] as String?,
+      gender: j['gender'] as String?);
 }

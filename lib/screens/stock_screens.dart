@@ -58,15 +58,15 @@ class _StocksTabState extends State<StocksTab> {
       final list = store.products
           .where((p) => (_cat == 'All' || p.category == _cat) && p.name.toLowerCase().contains(_q.toLowerCase()))
           .toList();
-      final customCategories = store.products
+      final allCategories = store.products
           .map((p) => p.category)
-          .where((c) => c.trim().isNotEmpty && !kProductCategories.contains(c))
+          .where((c) => c.trim().isNotEmpty)
           .toSet()
           .toList()
         ..sort();
       return BluePage(
         title: 'Stocks',
-        actions: [HeaderIcon(Icons.notifications, badge: store.hasAlerts, onTap: () => showAlerts(context))],
+        actions: [Watch((context) => HeaderIcon(Icons.notifications, badge: store.hasAlerts, onTap: () => showAlerts(context)))],
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
@@ -77,8 +77,7 @@ class _StocksTabState extends State<StocksTab> {
             child: ChipsRow(
               options: [
                 'All',
-                ...kProductCategories.where((c) => c != 'Others'),
-                ...customCategories,
+                ...allCategories,
               ],
               selected: _cat,
               onChanged: (v) => setState(() => _cat = v),
@@ -211,21 +210,13 @@ class ProductDetailScreen extends StatelessWidget {
             const SizedBox(height: 18),
             Row(children: [
               Expanded(
-                child: AppButton('Edit', height: 40, icon: prem ? null : Icons.lock_outline, onPressed: () {
-                  if (!requirePremium(context, 'Product and stock management',
-                      detail: 'Editing products is part of the Premium Plan. You need to subscribe first to access this.')) {
-                    return;
-                  }
+                child: AppButton('Edit', height: 40, onPressed: () {
                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductFormScreen(product: p)));
                 }),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: AppButton('Delete', color: const Color(0xFFFF3B5C), height: 40, icon: prem ? null : Icons.lock_outline, onPressed: () async {
-                  if (!requirePremium(context, 'Product and stock management',
-                      detail: 'Deleting products is part of the Premium Plan. You need to subscribe first to access this.')) {
-                    return;
-                  }
+                child: AppButton('Delete', color: const Color(0xFFFF3B5C), height: 40, onPressed: () async {
                   final ok = await confirmDelete(context,
                       title: 'Delete This Item?',
                       message: 'Are you sure you want to delete this item? This action cannot be undone.');

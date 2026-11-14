@@ -191,6 +191,7 @@ class HeaderIcon extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
   final bool badge;
+
   @override
   Widget build(BuildContext context) {
     return IconButton(
@@ -309,9 +310,9 @@ InputDecoration fieldDeco({String? hint, IconData? icon, String? prefixText, Wid
                 child: Text(prefixText, style: ts(13, w: FontWeight.w600)),
               )
             : null),
-    prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 20),
+    prefixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 12),
     suffixIcon: suffix,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
     border: border,
     enabledBorder: border,
     focusedBorder: const OutlineInputBorder(
@@ -358,6 +359,7 @@ class AppField extends StatelessWidget {
     this.onChanged,
     this.showLabel = true,
     this.bottomGap = 12,
+    this.fieldHeight = 48,
   });
   final String label;
   final String? hint;
@@ -376,24 +378,28 @@ class AppField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final bool showLabel;
   final double bottomGap;
+  final double fieldHeight;
 
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (showLabel) ...[fieldLabel(label, required), const SizedBox(height: 6)],
-      TextFormField(
-        controller: controller,
-        keyboardType: keyboard,
-        readOnly: readOnly,
-        onTap: onTap,
-        obscureText: obscure,
-        maxLines: obscure ? 1 : maxLines,
-        inputFormatters: formatters,
-        onChanged: onChanged,
-        style: ts(12),
-        validator: validator ??
-            (required ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null : null),
-        decoration: fieldDeco(hint: hint, icon: icon, prefixText: prefixText, suffix: suffix),
+      SizedBox(
+        height: fieldHeight,
+        child: TextFormField(
+          controller: controller,
+          keyboardType: keyboard,
+          readOnly: readOnly,
+          onTap: onTap,
+          obscureText: obscure,
+          maxLines: obscure ? 1 : maxLines,
+          inputFormatters: formatters,
+          onChanged: onChanged,
+          style: ts(12),
+          validator: validator ??
+              (required ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null : null),
+          decoration: fieldDeco(hint: hint, icon: icon, prefixText: prefixText, suffix: suffix),
+        ),
       ),
       SizedBox(height: bottomGap),
     ]);
@@ -409,6 +415,7 @@ class AppDropdown extends StatelessWidget {
     this.value,
     this.hint = 'Select',
     this.required = true,
+    this.bottomGap = 12,
   });
   final String label;
   final List<String> items;
@@ -416,6 +423,7 @@ class AppDropdown extends StatelessWidget {
   final String? value;
   final String hint;
   final bool required;
+  final double bottomGap;
 
   @override
   Widget build(BuildContext context) {
@@ -434,7 +442,7 @@ class AppDropdown extends StatelessWidget {
         onChanged: onChanged,
         validator: required ? (v) => v == null ? 'Required' : null : null,
       ),
-      const SizedBox(height: 12),
+      SizedBox(height: bottomGap),
     ]);
   }
 }
@@ -920,7 +928,7 @@ void showAlerts(BuildContext context) {
         ),
       );
     },
-  );
+  ).whenComplete(() => store.markAlertsViewed());
 }
 
 /// Pale wrapper around form pages: padded, scrollable, safe from keyboard.
