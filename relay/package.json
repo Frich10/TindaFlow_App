@@ -1,0 +1,13 @@
+{
+  "name": "tindaflow-otp-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local SMTP relay that emails TindaFlow password-reset OTP codes",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.16"
+  }
+}

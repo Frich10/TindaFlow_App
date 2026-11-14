@@ -1,0 +1,29 @@
+# Render.com service definition for the TindaFlow OTP relay.
+# Deploy: push this folder to a GitHub repo, then "New +" -> "Blueprint" in
+# Render, or create a Web Service pointing at relay/ with these settings.
+services:
+  - type: web
+    name: tindaflow-otp-relay
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    rootDir: relay
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /
+    envVars:
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        value: tindaflowofficial@gmail.com
+      # Set SMTP_PASS and RELAY_TOKEN as SECRET env vars in the Render dashboard
+      # (do not commit them). They are intentionally left empty here.
+      - key: SMTP_PASS
+        sync: false
+      - key: RELAY_TOKEN
+        sync: false
+      - key: RATE_LIMIT_PER_HOUR
+        value: "5"
