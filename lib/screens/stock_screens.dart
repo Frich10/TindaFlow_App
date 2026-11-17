@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
@@ -6,7 +6,7 @@ import '../data/models.dart';
 import '../data/store.dart';
 import '../widgets/common.dart';
 
-// ───────────────────────── Stocks tab ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Stocks tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class StocksTab extends StatefulWidget {
   const StocksTab({super.key});
@@ -23,7 +23,7 @@ class _StocksTabState extends State<StocksTab> {
     final qty = await showDialog<int>(
       context: context,
       builder: (c) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: kCard,
         title: Text('Add stock', style: ts(15, w: FontWeight.w700)),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${p.name}  •  current stock ${p.stock}', style: ts(11, c: kMuted)),
@@ -87,17 +87,20 @@ class _StocksTabState extends State<StocksTab> {
             child: list.isEmpty
                 ? EmptyState(Icons.inventory_2_outlined,
                     store.products.isEmpty ? 'No products yet.\nTap "Add Product" to begin.' : 'No matching products.')
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: list.length,
-                    itemBuilder: (_, i) {
-                      final p = list[i];
-                      return ProductRow(
-                        product: p,
-                        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductDetailScreen(productId: p.id))),
-                        onAdd: () => _restock(p),
-                      );
-                    },
+                : Refreshable(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: list.length,
+                      itemBuilder: (_, i) {
+                        final p = list[i];
+                        return ProductRow(
+                          product: p,
+                          onTap: () => Navigator.of(context).push(AppPageRoute(builder: (_) => ProductDetailScreen(productId: p.id))),
+                          onAdd: () => _restock(p),
+                        );
+                      },
+                    ),
                   ),
           ),
           Padding(
@@ -109,7 +112,7 @@ class _StocksTabState extends State<StocksTab> {
                     detail: 'The Free plan lets you add up to $kFreeProductLimit products. Subscribe to Premium to add unlimited products.');
                 return;
               }
-              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProductFormScreen()));
+              Navigator.of(context).push(AppPageRoute(builder: (_) => const ProductFormScreen()));
             }),
           ),
         ]),
@@ -118,7 +121,7 @@ class _StocksTabState extends State<StocksTab> {
   }
 }
 
-// ───────────────────────── Product details ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Product details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ProductDetailScreen extends StatelessWidget {
   const ProductDetailScreen({super.key, required this.productId});
@@ -211,7 +214,7 @@ class ProductDetailScreen extends StatelessWidget {
             Row(children: [
               Expanded(
                 child: AppButton('Edit', height: 40, onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductFormScreen(product: p)));
+                  Navigator.of(context).push(AppPageRoute(builder: (_) => ProductFormScreen(product: p)));
                 }),
               ),
               const SizedBox(width: 10),
@@ -256,7 +259,7 @@ class _Stat extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Add / edit product ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Add / edit product â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ProductFormScreen extends StatefulWidget {
   const ProductFormScreen({super.key, this.product});
@@ -285,6 +288,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _photo = widget.product?.photo;
 
     if (_category != null &&
+        !store.allCategories.contains(_category) &&
         !kProductCategories.contains(_category)) {
       _customCategory.text = _category!;
       _category = 'Others';
@@ -327,6 +331,11 @@ void _save() {
   final price = parseMoney(_price.text);
   final stock = int.tryParse(_stock.text) ?? 0;
   final old = widget.product;
+
+  // Remember a brand-new category so it appears in the dropdown next time.
+  if (_category == 'Others') {
+    store.addCategory(finalCategory);
+  }
 
   final p = Product(
     id: old?.id ?? newId(),
@@ -416,7 +425,7 @@ void _save() {
           AppDropdown(
             label: 'Category',
             hint: 'Category',
-            items: kProductCategories,
+            items: store.allCategories,
             value: _category,
             onChanged: (v) {
               setState(() {

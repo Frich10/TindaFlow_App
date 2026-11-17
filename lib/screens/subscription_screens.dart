@@ -1,5 +1,6 @@
+﻿import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/format.dart';
@@ -105,7 +106,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final data = await showModalBottomSheet<_Payer>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: kCard,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (_) => const _PayerSheet(),
     );
@@ -140,7 +141,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  // ─────────────── Free plan / upgrade ───────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Free plan / upgrade â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _plans(PaymentRequest? r) {
     return ListView(padding: const EdgeInsets.all(16), children: [
       if (r != null && r.status == PayStatus.expired && r.expiresAt != null) ...[
@@ -172,7 +173,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(8)),
               child: Text('Active', style: ts(9, w: FontWeight.w600, c: kBlue)),
             ),
           ]),
@@ -233,7 +234,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     ]);
   }
 
-  // ─────────────── Checking the receipt ───────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Checking the receipt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _verifying() {
     return Center(
       child: Padding(
@@ -250,7 +251,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  // ─────────────── Pay with QR, then upload the receipt ───────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Pay with QR, then upload the receipt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _upload(PaymentRequest r) {
     final refReady = ReceiptValidator.digitsOf(_ref.text).length == 13;
     const steps = [
@@ -357,7 +358,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             hint: '0000 000 000000',
             icon: Icons.confirmation_number_outlined,
             keyboard: TextInputType.number,
-            formatters: [_RefFormatter()],
+            formatters: refFormatters,
             validator: (_) => null,
             bottomGap: 4,
           ),
@@ -391,7 +392,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     ]);
   }
 
-  // ─────────────── Payment failed ───────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Payment failed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _failed(PaymentRequest r) {
     return ListView(padding: const EdgeInsets.all(20), children: [
       const SizedBox(height: 24),
@@ -423,7 +424,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     ]);
   }
 
-  // ─────────────── Success ───────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Success â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _success(PaymentRequest r) {
     Widget row(String l, String v) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -473,7 +474,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     ]);
   }
 
-  // ─────────────── Premium active ───────────────
+  // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Premium active â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Widget _active(PaymentRequest? r) {
     final start = r?.startedAt ?? store.subscriptionStart ?? DateTime.now().subtract(const Duration(days: 30));
     final end = r?.expiresAt ?? store.subscriptionEnd ?? DateTime.now().add(const Duration(days: 30));
@@ -504,7 +505,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(8)),
               child: Text('Active', style: ts(9, w: FontWeight.w600, c: kBlue)),
             ),
           ]),
@@ -536,7 +537,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 }
 
-// ─────────────── Payer details modal ───────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Payer details modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class _PayerSheet extends StatefulWidget {
   const _PayerSheet();
   @override
@@ -588,7 +589,7 @@ class _PayerSheetState extends State<_PayerSheet> {
             ]),
             const SizedBox(height: 14),
             AppField(label: 'Full Name', controller: _name, hint: 'Full name', icon: Icons.person_outline),
-            AppField(label: 'Phone Number', controller: _phone, hint: 'Phone Number', icon: Icons.phone_outlined, keyboard: TextInputType.phone, validator: phoneError),
+            AppField(label: 'Phone Number', controller: _phone, hint: 'Phone Number', icon: Icons.phone_outlined, keyboard: TextInputType.phone, formatters: phoneFormatters, validator: phoneError),
             AppField(label: 'Email Address', controller: _email, hint: 'Email Address', icon: Icons.mail_outline, keyboard: TextInputType.emailAddress, validator: emailError),
             AppButton('Proceed to Payment', onPressed: _submit),
             const SizedBox(height: 8),
@@ -599,21 +600,5 @@ class _PayerSheetState extends State<_PayerSheet> {
         ),
       ),
     );
-  }
-}
-
-/// Formats the reference number as 0000 000 000000 while typing.
-class _RefFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    final d = newValue.text.replaceAll(RegExp(r'\D'), '');
-    final t = d.length > 13 ? d.substring(0, 13) : d;
-    final b = StringBuffer();
-    for (var i = 0; i < t.length; i++) {
-      if (i == 4 || i == 7) b.write(' ');
-      b.write(t[i]);
-    }
-    final out = b.toString();
-    return TextEditingValue(text: out, selection: TextSelection.collapsed(offset: out.length));
   }
 }

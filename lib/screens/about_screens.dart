@@ -1,16 +1,16 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme.dart';
 import '../widgets/common.dart';
 import 'auth_screens.dart' show TindaLogo;
 
-// ───────────────────────── About TindaFlow ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ About TindaFlow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  void _go(BuildContext context, Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
+  void _go(BuildContext context, Widget w) => Navigator.of(context).push(AppPageRoute(builder: (_) => w));
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +45,7 @@ class _AboutTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.white,
+        color: kCard,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -71,7 +71,7 @@ class _AboutTile extends StatelessWidget {
   }
 }
 
-// ───────────────────────── shared layout pieces ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ shared layout pieces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _InfoPage extends StatelessWidget {
   const _InfoPage({required this.title, required this.icon, required this.heading, required this.intro, required this.children, this.footer});
@@ -160,7 +160,47 @@ Widget _heading(String t) => Padding(
       child: Text(t, style: ts(12, w: FontWeight.w700, c: kBlue)),
     );
 
-// ───────────────────────── Features ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Features â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+class HowItWorksScreen extends StatelessWidget {
+  const HowItWorksScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return _InfoPage(
+      title: 'How It Works',
+      icon: Icons.help_outline,
+      heading: 'Simple steps to run your store',
+      intro: 'Follow these quick guides to record and review every part of your business in TindaFlow.',
+      children: [
+        _heading('Stocks'),
+        const _SectionCard(icon: Icons.add_box_outlined, color: kBlue, title: 'Add a product', body: 'Open Stocks, tap the add button, then enter the product name, price, cost, stock count and category. Save it and it appears in your product list.'),
+        const _SectionCard(icon: Icons.edit_outlined, color: kBlue, title: 'Update stock', body: 'Tap any product to edit its details or adjust the stock count. Use the +/- buttons on the product card to quickly add or remove units.'),
+        const _SectionCard(icon: Icons.low_priority, color: kRed, title: 'Watch low stock', body: 'Products at or below their low-stock threshold are highlighted in red so you know when to restock.'),
+
+        _heading('Sales'),
+        const _SectionCard(icon: Icons.point_of_sale, color: kGreen, title: 'Ring up a sale', body: 'Open Sales, tap products to add them to the cart, choose Cash or GCash, then tap Checkout. Change is computed automatically.'),
+        const _SectionCard(icon: Icons.history, color: kGreen, title: 'Review history', body: 'Every completed sale is saved in Sales history with its items, total and payment method. Tap a record to see the full details.'),
+
+        _heading('Debt (Utang)'),
+        const _SectionCard(icon: Icons.person_add_alt, color: kRed, title: 'Record a debt', body: 'Open Debt, tap add, then enter the customer name, items, amount and an optional due date. Save it to track what is owed.'),
+        const _SectionCard(icon: Icons.check_circle_outline, color: kRed, title: 'Mark as paid', body: 'When a customer pays, open the debt and tap Mark as Paid. The total stays the same but the status changes to Paid.'),
+
+        _heading('Expenses'),
+        const _SectionCard(icon: Icons.receipt_long, color: kOrange, title: 'Log an expense', body: 'Open Expenses, tap add, then enter the category, amount, date and an optional note. Save it to keep a record of your operating costs.'),
+        const _SectionCard(icon: Icons.pie_chart_outline, color: kOrange, title: 'See where money goes', body: 'Each expense is grouped by category so you can see which costs take up the most of your budget.'),
+
+        _heading('GCash Records'),
+        const _SectionCard(icon: Icons.add_circle_outline, color: kBlue, title: 'Record a transaction', body: 'Open GCash, tap add, then choose Cash In or Cash Out, enter the amount, fee, date, time and reference number. Save it to your records.'),
+        const _SectionCard(icon: Icons.document_scanner_outlined, color: kBlue, title: 'Scan a receipt', body: 'Tap the scan icon on the Record GCash screen to read a receipt photo. The amount, date, time, name and number are filled in for you to review before saving.'),
+        const _SectionCard(icon: Icons.bar_chart, color: kBlue, title: 'Cash-flow report', body: 'Tap the download icon on the GCash screen to export a cash-flow report by day, week, month or year.'),
+
+        _heading('Subscriptions'),
+        const _SectionCard(icon: Icons.workspace_premium, color: kGreen, title: 'Go Premium', body: 'Open Subscription, tap Subscribe, then pay ₱39 through GCash and submit your details and receipt. Premium activates after your payment is verified.'),
+        const _SectionCard(icon: Icons.verified_outlined, color: kGreen, title: 'Check your status', body: 'The Subscription screen shows whether you are on the Free or Premium plan and when your Premium access started.'),
+      ],
+    );
+  }
+}
 
 class FeaturesScreen extends StatelessWidget {
   const FeaturesScreen({super.key});
@@ -186,7 +226,7 @@ class FeaturesScreen extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Privacy Policy ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Privacy Policy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
@@ -209,7 +249,7 @@ class PrivacyScreen extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Terms of Service ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Terms of Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TermsScreen extends StatelessWidget {
   const TermsScreen({super.key});
@@ -232,7 +272,7 @@ class TermsScreen extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Contact Support ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Contact Support â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ContactScreen extends StatelessWidget {
   const ContactScreen({super.key});

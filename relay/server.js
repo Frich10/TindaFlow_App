@@ -1,36 +1,30 @@
 'use strict';
 
 /**
- * TindaFlow OTP SMTP Relay
- * -------------------------
- * Runs on your own PC (no cloud / no Blaze). It holds the Gmail app password
- * locally and exposes a tiny HTTP endpoint the TindaFlow app calls on the same
- * Wi-Fi to email a password-reset OTP.
+ * TindaFlow OTP Relay (Brevo transactional email)
+ * ------------------------------------------------
+ * Public HTTP endpoint that emails a password-reset / MPIN-reset OTP code using
+ * the Brevo (formerly Sendinblue) transactional email API. Works from any cloud
+ * host (Render, etc.) — unlike Gmail SMTP, which cloud IPs often block.
  *
- *   npm install
- *   npm start
+ * Deploy: push to GitHub, import on Render (see render.yaml).
  *
- * Then set the app's "Relay server URL" (see OTP RELAY section in
- * lib/data/otp_service.dart) to:  http://<this-pc-LAN-IP>:5000
- *
- * Environment overrides (optional):
- *   SMTP_HOST (default smtp.gmail.com)
- *   SMTP_PORT (default 465)
- *   SMTP_USER (default tindaflowofficial@gmail.com)
- *   SMTP_PASS (default the app password below — change for your setup)
- *   RELAY_PORT (default 5000)
+ * Environment variables:
+ *   BREVO_API_KEY   (required) — Brevo API key (v3). Get it at
+ *                   https://app.brevo.com/settings/keys/api
+ *   FROM_EMAIL      (required) — verified sender, e.g. tindaflowofficial@gmail.com
+ *   FROM_NAME       (optional) — sender display name (default "TindaFlow")
+ *   RELAY_TOKEN     (recommended) — shared secret the app sends as X-Relay-Token
+ *   RATE_LIMIT_PER_HOUR (optional, default 5)
+ *   PORT / RELAY_PORT (optional, default 5000)
  */
 
 const http = require('http');
-const nodemailer = require('nodemailer');
 
 // ─── Config ────────────────────────────────────────────────────────────────
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
-const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
-const SMTP_USER = process.env.SMTP_USER || 'tindaflowofficial@gmail.com';
-// On a public host, set SMTP_PASS as an environment variable (Render secret).
-// No hardcoded fallback — the relay refuses to start without it.
-const SMTP_PASS = process.env.SMTP_PASS || '';
+const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'tindaflowofficial@gmail.com';
+const FROM_NAME = process.env.FROM_NAME || 'TindaFlow';
 // Honor platform-injected PORT (Render/Heroku/Cloud Run), then RELAY_PORT.
 const RELAY_PORT = Number(process.env.PORT || process.env.RELAY_PORT || 5000);
 // Shared secret the app must send in the X-Relay-Token header. If set, requests
@@ -40,8 +34,6 @@ const RELAY_TOKEN = process.env.RELAY_TOKEN || '';
 const RATE_LIMIT_PER_HOUR = Number(process.env.RATE_LIMIT_PER_HOUR || 5);
 
 const APP_NAME = 'TindaFlow';
-const FROM_EMAIL = SMTP_USER;
-
 const MAIL_SUBJECT = 'TindaFlow password reset code';
 const MAIL_BODY = (code) =>
   `Hello,\n\n` +
@@ -51,26 +43,31 @@ const MAIL_BODY = (code) =>
   `you can safely ignore this email.\n\n` +
   `— The ${APP_NAME} team`;
 
-// ─── Mailer ────────────────────────────────────────────────────────────────
-if (!SMTP_PASS) {
-  console.error('[relay] SMTP_PASS is not set. Set it as an environment variable.');
+// ─── Mailer (Brevo API) ────────────────────────────────────────────────────
+if (!BREVO_API_KEY) {
+  console.error('[relay] BREVO_API_KEY is not set. Set it as an environment variable.');
   process.exit(1);
 }
 
-const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: SMTP_PORT,
-  secure: SMTP_PORT === 465,
-  auth: { user: SMTP_USER, pass: SMTP_PASS },
-});
-
 async function sendOtpEmail(to, code) {
-  return transporter.sendMail({
-    from: `"${APP_NAME}" <${FROM_EMAIL}>`,
-    to,
-    subject: MAIL_SUBJECT,
-    text: MAIL_BODY(code),
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: { name: FROM_NAME, email: FROM_EMAIL },
+      to: [{ email: to }],
+      subject: MAIL_SUBJECT,
+      textContent: MAIL_BODY(code),
+    }),
   });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Brevo API ${res.status}: ${errText.slice(0, 200)}`);
+  }
+  return res.json();
 }
 
 // ─── HTTP ──────────────────────────────────────────────────────────────────
@@ -94,7 +91,8 @@ function readBody(req) {
     req.on('end', () => {
       try {
         resolve(data ? JSON.parse(data) : {});
-      } catch (_) {
+      } catch (e) {
+        console.error('[relay] invalid_json, raw body length=', data.length, 'body=', JSON.stringify(data).slice(0, 300));
         reject(new Error('invalid_json'));
       }
     });
@@ -135,14 +133,21 @@ function clientIp(req) {
 const server = http.createServer(async (req, res) => {
   // CORS: allow the Flutter web app (served from another origin) to call us.
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Relay-Token');
   res.setHeader('Access-Control-Max-Age', '86400');
 
   // Browser preflight for cross-origin POST.
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
+    return;
+  }
+
+  // Health check endpoint (Render pings GET / for liveness).
+  if (req.method === 'GET' && req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, service: 'tindaflow-otp-relay' }));
     return;
   }
 
@@ -185,19 +190,24 @@ const server = http.createServer(async (req, res) => {
     }
 
     const info = await sendOtpEmail(email, code);
-    console.log(`[relay] sent code to ${email} (${info.messageId})`);
+    console.log(`[relay] sent code to ${email} (${info.messageId || 'ok'})`);
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, message: 'Code sent to ' + email + '.' }));
   } catch (err) {
     console.error('[relay] send failed:', err.message);
+    const hint = /sender/i.test(err.message)
+      ? ' Verify the sender email in Brevo (Settings > Senders & Domains).'
+      : /api.?key|unauthorized|forbidden|401|403/i.test(err.message)
+        ? ' Check the BREVO_API_KEY env var in Render.'
+        : '';
     res.writeHead(502, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: false, message: 'Could not send the code. Is the PC online and the app password valid?' }));
+    res.end(JSON.stringify({ ok: false, message: 'Could not send the code. Please try again later.' + hint }));
   }
 });
 
 server.listen(RELAY_PORT, '0.0.0.0', () => {
   console.log('TindaFlow OTP relay listening on http://0.0.0.0:' + RELAY_PORT);
   console.log('Set the app relay URL to: http://<this-pc-LAN-IP>:' + RELAY_PORT);
-  console.log('Sending as:', SMTP_USER, 'via', SMTP_HOST + ':' + SMTP_PORT);
+  console.log('Sending as:', FROM_NAME, '<' + FROM_EMAIL + '>', 'via Brevo API');
 });

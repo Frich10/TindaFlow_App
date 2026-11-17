@@ -1,6 +1,5 @@
-# Render.com service definition for the TindaFlow OTP relay.
-# Deploy: push this folder to a GitHub repo, then "New +" -> "Blueprint" in
-# Render, or create a Web Service pointing at relay/ with these settings.
+# Render.com service definition for the TindaFlow OTP relay (Brevo).
+# Deploy: push this repo to GitHub, then "New +" -> "Blueprint" in Render.
 services:
   - type: web
     name: tindaflow-otp-relay
@@ -8,20 +7,18 @@ services:
     plan: free
     region: singapore
     branch: main
-    rootDir: relay
     buildCommand: npm install
     startCommand: node server.js
-    healthCheckPath: /
     envVars:
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: "465"
-      - key: SMTP_USER
+      - key: NODE_VERSION
+        value: "20"
+      - key: FROM_EMAIL
         value: tindaflowofficial@gmail.com
-      # Set SMTP_PASS and RELAY_TOKEN as SECRET env vars in the Render dashboard
-      # (do not commit them). They are intentionally left empty here.
-      - key: SMTP_PASS
+      - key: FROM_NAME
+        value: "TindaFlow"
+      # Set BREVO_API_KEY and RELAY_TOKEN as SECRET env vars in the Render
+      # dashboard (do not commit them). They are intentionally left empty here.
+      - key: BREVO_API_KEY
         sync: false
       - key: RELAY_TOKEN
         sync: false

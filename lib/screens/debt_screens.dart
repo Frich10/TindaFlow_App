@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
@@ -6,7 +6,7 @@ import '../data/models.dart';
 import '../data/store.dart';
 import '../widgets/common.dart';
 
-// ───────────────────────── Debt overview ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Debt overview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class DebtTab extends StatefulWidget {
   const DebtTab({super.key});
@@ -60,44 +60,47 @@ class _DebtTabState extends State<DebtTab> {
           Expanded(
             child: list.isEmpty
                 ? const EmptyState(Icons.people_outline, 'No customer debts found.')
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    itemCount: list.length,
-                    itemBuilder: (_, i) {
-                      final d = list[i];
-                      return GestureDetector(
-                        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DebtDetailScreen(debtId: d.id))),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(10),
-                          decoration: cardDeco(border: const Color(0xFFD5E4F7)),
-                          child: Row(children: [
-                            InitialAvatar(d.customer, size: 34),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text(d.customer, style: ts(11, w: FontWeight.w700)),
-                                Text(peso(d.total, decimals: true), style: ts(13, w: FontWeight.w700, c: kBlue)),
-                                Row(children: [
-                                  const Icon(Icons.calendar_month, size: 10, color: kBlue),
-                                  const SizedBox(width: 3),
-                                  Text(fmtDateLong(d.debtDate), style: ts(8, c: kMuted)),
+                : Refreshable(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: list.length,
+                      itemBuilder: (_, i) {
+                        final d = list[i];
+                        return GestureDetector(
+                          onTap: () => Navigator.of(context).push(AppPageRoute(builder: (_) => DebtDetailScreen(debtId: d.id))),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: cardDeco(border: const Color(0xFFD5E4F7)),
+                            child: Row(children: [
+                              InitialAvatar(d.customer, size: 34),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text(d.customer, style: ts(11, w: FontWeight.w700)),
+                                  Text(peso(d.total, decimals: true), style: ts(13, w: FontWeight.w700, c: kBlue)),
+                                  Row(children: [
+                                    const Icon(Icons.calendar_month, size: 10, color: kBlue),
+                                    const SizedBox(width: 3),
+                                    Text(fmtDateLong(d.debtDate), style: ts(8, c: kMuted)),
+                                  ]),
                                 ]),
-                              ]),
-                            ),
-                            d.paid ? const StatusChip('Paid') : const StatusChip('Unpaid', color: kRed, bg: kRedTint),
-                            const SizedBox(width: 6),
-                            const Icon(Icons.chevron_right, size: 18, color: kBlue),
-                          ]),
-                        ),
-                      );
-                    },
+                              ),
+                              d.paid ? const StatusChip('Paid') : StatusChip('Unpaid', color: kRed, bg: kRedTint),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.chevron_right, size: 18, color: kBlue),
+                            ]),
+                          ),
+                        );
+                      },
+                    ),
                   ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
             child: AppButton('Add Debt', color: kGreen, icon: Icons.add, height: 42,
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DebtFormScreen()))),
+                onPressed: () => Navigator.of(context).push(AppPageRoute(builder: (_) => const DebtFormScreen()))),
           ),
         ]),
       );
@@ -124,7 +127,7 @@ class _Count extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Debt details ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Debt details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class DebtDetailScreen extends StatelessWidget {
   const DebtDetailScreen({super.key, required this.debtId});
@@ -160,7 +163,7 @@ class DebtDetailScreen extends StatelessWidget {
                           Text(d.phone, style: ts(10, c: kBlueDark)),
                         ]),
                       ),
-                      d.paid ? const StatusChip('Paid') : const StatusChip('Unpaid', color: kRed, bg: kRedTint),
+                      d.paid ? const StatusChip('Paid') : StatusChip('Unpaid', color: kRed, bg: kRedTint),
                     ]),
                     const SizedBox(height: 10),
                     Container(
@@ -184,7 +187,7 @@ class DebtDetailScreen extends StatelessWidget {
                       const Icon(Icons.shopping_cart_outlined, size: 14, color: kBlue),
                       const SizedBox(width: 6),
                       Expanded(flex: 5, child: cell('Items Owed', bold: true)),
-                      Expanded(flex: 1, child: cell('Qty', bold: true)),
+                      Expanded(flex: 1, child: cell('Qty', bold: true, a: TextAlign.center)),
                       Expanded(flex: 2, child: cell('Price', bold: true, a: TextAlign.right)),
                       Expanded(flex: 2, child: cell('Total', bold: true, a: TextAlign.right)),
                     ]),
@@ -195,7 +198,7 @@ class DebtDetailScreen extends StatelessWidget {
                         child: Row(children: [
                           const SizedBox(width: 20),
                           Expanded(flex: 5, child: cell(i.name)),
-                          Expanded(flex: 1, child: cell('×${i.qty}')),
+                          Expanded(flex: 1, child: cell('${i.qty}', a: TextAlign.center)),
                           Expanded(flex: 2, child: cell(peso(i.price, decimals: true), a: TextAlign.right)),
                           Expanded(flex: 2, child: cell(peso(i.total, decimals: true), a: TextAlign.right)),
                         ]),
@@ -222,7 +225,7 @@ class DebtDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 AppButton('Edit Debt', outlined: true, height: 42,
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DebtFormScreen(debt: d)))),
+                    onPressed: () => Navigator.of(context).push(AppPageRoute(builder: (_) => DebtFormScreen(debt: d)))),
                 const SizedBox(height: 8),
                 AppButton(d.paid ? 'Mark as Unpaid' : 'Paid', height: 42, onPressed: () {
                   store.setDebtPaid(d.id, !d.paid);
@@ -254,7 +257,7 @@ class _DateInfo extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Add / edit debt ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Add / edit debt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class DebtFormScreen extends StatefulWidget {
   const DebtFormScreen({super.key, this.debt});
@@ -386,7 +389,7 @@ class _DebtFormScreenState extends State<DebtFormScreen> {
         button: AppButton('Save', onPressed: _save),
         children: [
           AppField(label: 'Customer', controller: _customer, hint: 'Customer name', icon: Icons.person_outline),
-          AppField(label: 'Phone Number', controller: _phone, hint: 'Phone Number', icon: Icons.phone_outlined, keyboard: TextInputType.phone, validator: phoneError),
+          AppField(label: 'Phone Number', controller: _phone, hint: 'Phone Number', icon: Icons.phone_outlined, keyboard: TextInputType.phone, formatters: phoneFormatters, validator: phoneError),
           fieldLabel('Products', true),
           const SizedBox(height: 6),
           TextField(

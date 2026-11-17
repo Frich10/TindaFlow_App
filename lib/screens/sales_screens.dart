@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
@@ -7,7 +7,7 @@ import '../data/store.dart';
 import '../widgets/common.dart';
 import 'profile_screens.dart' show GcashQrImage;
 
-// ───────────────────────── Sales tab ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Sales tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SalesTab extends StatefulWidget {
   const SalesTab({super.key});
@@ -28,10 +28,10 @@ class _SalesTabState extends State<SalesTab> {
       return BluePage(
         title: 'Sales',
         actions: [
-          HeaderIcon(Icons.history, onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SalesHistoryScreen()))),
+          HeaderIcon(Icons.history, onTap: () => Navigator.of(context).push(AppPageRoute(builder: (_) => const SalesHistoryScreen()))),
           HeaderIcon(Icons.shopping_cart_outlined,
               badge: store.cart.isNotEmpty,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewSaleScreen()))),
+              onTap: () => Navigator.of(context).push(AppPageRoute(builder: (_) => const NewSaleScreen()))),
         ],
         child: Column(children: [
           Padding(
@@ -58,21 +58,24 @@ class _SalesTabState extends State<SalesTab> {
             child: list.isEmpty
                 ? EmptyState(Icons.inventory_2_outlined,
                     store.products.isEmpty ? 'No products yet.\nAdd some in the Stocks tab.' : 'No matching products.')
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: list.length,
-                    itemBuilder: (_, i) {
-                      final p = list[i];
-                      return ProductRow(
-                        product: p,
-                        onAdd: p.stock <= 0
-                            ? null
-                            : () {
-                                final err = store.addToCart(p);
-                                snack(context, err ?? 'Added ${p.name} to the sale');
-                              },
-                      );
-                    },
+                : Refreshable(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: list.length,
+                      itemBuilder: (_, i) {
+                        final p = list[i];
+                        return ProductRow(
+                          product: p,
+                          onAdd: p.stock <= 0
+                              ? null
+                              : () {
+                                  final err = store.addToCart(p);
+                                  snack(context, err ?? 'Added ${p.name} to the sale');
+                                },
+                        );
+                      },
+                    ),
                   ),
           ),
         ]),
@@ -81,7 +84,7 @@ class _SalesTabState extends State<SalesTab> {
   }
 }
 
-// ───────────────────────── New sale (cart) ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ New sale (cart) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class NewSaleScreen extends StatelessWidget {
   const NewSaleScreen({super.key});
@@ -96,7 +99,7 @@ class NewSaleScreen extends StatelessWidget {
       context: context,
       builder: (c) => StatefulBuilder(
         builder: (c, setSt) => Dialog(
-          backgroundColor: Colors.white,
+          backgroundColor: kCard,
           insetPadding: const EdgeInsets.symmetric(horizontal: 40),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           child: Padding(
@@ -232,12 +235,12 @@ class NewSaleScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
               child: Row(children: [
                 Expanded(
-                  child: AppButton('Cash', color: kGreen, height: 42, icon: Icons.paid,
+                  child: AppButton('Cash', color: kGreen, height: 42,
                       onPressed: cart.isEmpty ? null : () => _pay(context, 'Cash')),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: AppButton('Gcash', height: 42, leading: const GIcon(size: 20, light: true),
+                  child: AppButton('Gcash', height: 42,
                       onPressed: cart.isEmpty
                           ? null
                           : () {
@@ -253,7 +256,7 @@ class NewSaleScreen extends StatelessWidget {
   }
 
   void _pay(BuildContext context, String method) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => PaymentScreen(initialMethod: method)));
+    Navigator.of(context).push(AppPageRoute(builder: (_) => PaymentScreen(initialMethod: method)));
   }
 }
 
@@ -269,7 +272,7 @@ class _Step extends StatelessWidget {
         width: 22,
         height: 22,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: kCard,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: kFieldBorder),
         ),
@@ -279,7 +282,7 @@ class _Step extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Payment ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Payment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key, required this.initialMethod});
@@ -293,6 +296,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final _received = TextEditingController();
   late final double _total = store.cartTotal;
   Sale? _done;
+  bool _processing = false;
 
   @override
   void initState() {
@@ -308,14 +312,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   double get _rec => parseMoney(_received.text);
 
-  void _confirm() {
+  Future<void> _confirm() async {
+    if (_processing) return;
     if (store.cart.isEmpty) return;
     if (_method == 'Cash' && _rec < _total) {
       snack(context, 'Amount received is less than the total.');
       return;
     }
+    setState(() => _processing = true);
+    final entry = OverlayEntry(
+      builder: (c) => const Positioned.fill(
+        child: Material(
+          color: Colors.black54,
+          child: Center(child: CircularProgressIndicator(color: kBlue, strokeWidth: 3)),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(entry);
+    await Future.delayed(const Duration(milliseconds: 1000));
     final sale = store.completeSale(method: _method, received: _method == 'Cash' ? _rec : _total);
-    setState(() => _done = sale);
+    entry.remove();
+    if (!mounted) return;
+    setState(() {
+      _processing = false;
+      _done = sale;
+    });
   }
 
   void _finish(bool newSale) {
@@ -432,7 +453,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
-          child: AppButton('Confirm Payment', onPressed: _rec >= _total && _total > 0 ? _confirm : null),
+          child: AppButton('Confirm Payment', onPressed: _rec >= _total && _total > 0 && !_processing ? _confirm : null),
         ),
       ),
     ]);
@@ -481,7 +502,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
-          child: AppButton('Done', onPressed: _total > 0 ? _confirm : null),
+          child: AppButton('Done', onPressed: _total > 0 && !_processing ? _confirm : null),
         ),
       ),
     ]);
@@ -539,7 +560,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 }
 
-// ───────────────────────── Sales history ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Sales history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
@@ -577,7 +598,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   void _details(Sale s) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: kCard,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (c) => SafeArea(
         child: Padding(

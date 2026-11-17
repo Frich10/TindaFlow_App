@@ -1,17 +1,61 @@
 int _seq = 0;
 String newId() => '${DateTime.now().microsecondsSinceEpoch}${_seq++}';
 
-DateTime _dt(dynamic v) => DateTime.parse(v as String);
-double _num(dynamic v) => (v as num).toDouble();
+DateTime _dt(dynamic v) {
+  if (v is DateTime) return v;
+  return DateTime.parse(v.toString());
+}
+double _num(dynamic v) {
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v) ?? 0;
+  return 0;
+}
 
-Map<String, dynamic> _asStringMap(dynamic v) {
+int _int(dynamic v) {
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v) ?? 0;
+  return 0;
+}
+
+/// Safely reads a String field. Returns [fallback] when the value is null or
+/// the wrong type.
+String _str(dynamic v, [String fallback = '']) {
+  if (v is String) return v;
+  if (v == null) return fallback;
+  return fallback;
+}
+
+/// Safely reads a bool field.
+bool _bool(dynamic v, [bool fallback = false]) {
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  if (v is String) return v.toLowerCase() == 'true';
+  return fallback;
+}
+
+/// Recursively normalizes a value so map keys become Strings.
+/// Scalars are preserved as-is (only the keys are stringified).
+dynamic _asStringMap(dynamic v) {
   if (v is Map) {
     return v.map((k, val) => MapEntry(k.toString(), _asStringMap(val)));
   }
   if (v is List) {
-    return v.asMap().map((k, val) => MapEntry(k.toString(), _asStringMap(val)));
+    return v.map((e) => _asStringMap(e)).toList();
   }
   return v;
+}
+
+/// Normalizes an `items` field into a list of maps.
+/// Data may be stored as objects keyed "0","1",... and a corrupted/partial
+/// entry can be a scalar; skip anything that is not a map.
+List<Map<String, dynamic>> _itemList(dynamic v) {
+  if (v is List) {
+    return v.whereType<Map>().map((e) => Map<String, dynamic>.from(_asStringMap(e) as Map)).toList();
+  }
+  if (v is Map) {
+    return v.values.whereType<Map>().map((e) => Map<String, dynamic>.from(_asStringMap(e) as Map)).toList();
+  }
+  return const [];
 }
 
 const kCashIn = 'Cash In';
@@ -47,13 +91,13 @@ class Product {
         'price': price, 'stock': stock, 'photo': photo,
       };
   factory Product.fromJson(Map<String, dynamic> j) => Product(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        category: j['category'] as String,
+        id: _str(j['id']),
+        name: _str(j['name']),
+        category: _str(j['category']),
         cost: _num(j['cost']),
         price: _num(j['price']),
-        stock: (j['stock'] as num).toInt(),
-        photo: j['photo'] as String?,
+        stock: _int(j['stock']),
+        photo: j['photo'] is String ? j['photo'] as String : null,
       );
 }
 
@@ -66,10 +110,10 @@ class StockMove {
   Map<String, dynamic> toJson() =>
       {'productId': productId, 'date': date.toIso8601String(), 'delta': delta, 'reason': reason};
   factory StockMove.fromJson(Map<String, dynamic> j) => StockMove(
-      productId: j['productId'] as String,
+      productId: _str(j['productId']),
       date: _dt(j['date']),
-      delta: (j['delta'] as num).toInt(),
-      reason: j['reason'] as String);
+      delta: _int(j['delta']),
+      reason: _str(j['reason']));
 }
 
 class SaleItem {
@@ -88,11 +132,11 @@ class SaleItem {
   Map<String, dynamic> toJson() =>
       {'productId': productId, 'name': name, 'price': price, 'cost': cost, 'qty': qty};
   factory SaleItem.fromJson(Map<String, dynamic> j) => SaleItem(
-      productId: j['productId'] as String,
-      name: j['name'] as String,
+      productId: _str(j['productId']),
+      name: _str(j['name']),
       price: _num(j['price']),
       cost: _num(j['cost']),
-      qty: (j['qty'] as num).toInt());
+      qty: _int(j['qty']));
 }
 
 class Sale {
@@ -117,12 +161,12 @@ class Sale {
         'received': received, 'items': items.map((e) => e.toJson()).toList(),
       };
   factory Sale.fromJson(Map<String, dynamic> j) => Sale(
-        id: j['id'] as String,
+        id: _str(j['id']),
         date: _dt(j['date']),
-        method: j['method'] as String,
+        method: _str(j['method']),
         total: _num(j['total']),
         received: _num(j['received']),
-        items: (j['items'] as List).map((e) => SaleItem.fromJson(_asStringMap(e))).toList(),
+        items: _itemList(j['items']).map(SaleItem.fromJson).toList(),
       );
 }
 
@@ -151,14 +195,14 @@ class GcashTx {
         'type': type, 'date': date.toIso8601String(), 'ref': ref,
       };
   factory GcashTx.fromJson(Map<String, dynamic> j) => GcashTx(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        phone: j['phone'] as String,
+        id: _str(j['id']),
+        name: _str(j['name']),
+        phone: _str(j['phone']),
         amount: _num(j['amount']),
         fee: _num(j['fee']),
-        type: j['type'] as String,
+        type: _str(j['type']),
         date: _dt(j['date']),
-        ref: j['ref'] as String,
+        ref: _str(j['ref']),
       );
 }
 
@@ -184,13 +228,13 @@ class Expense {
         'method': method, 'date': date.toIso8601String(), 'notes': notes,
       };
   factory Expense.fromJson(Map<String, dynamic> j) => Expense(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        category: j['category'] as String,
+        id: _str(j['id']),
+        name: _str(j['name']),
+        category: _str(j['category']),
         amount: _num(j['amount']),
-        method: j['method'] as String,
+        method: _str(j['method']),
         date: _dt(j['date']),
-        notes: (j['notes'] as String?) ?? '',
+        notes: _str(j['notes']),
       );
 }
 
@@ -202,7 +246,7 @@ class DebtItem {
   double get total => qty * price;
   Map<String, dynamic> toJson() => {'name': name, 'qty': qty, 'price': price};
   factory DebtItem.fromJson(Map<String, dynamic> j) =>
-      DebtItem(name: j['name'] as String, qty: (j['qty'] as num).toInt(), price: _num(j['price']));
+      DebtItem(name: _str(j['name']), qty: _int(j['qty']), price: _num(j['price']));
 }
 
 class Debt {
@@ -229,13 +273,13 @@ class Debt {
         'items': items.map((e) => e.toJson()).toList(),
       };
   factory Debt.fromJson(Map<String, dynamic> j) => Debt(
-        id: j['id'] as String,
-        customer: j['customer'] as String,
-        phone: j['phone'] as String,
-        paid: j['paid'] as bool,
+        id: _str(j['id']),
+        customer: _str(j['customer']),
+        phone: _str(j['phone']),
+        paid: _bool(j['paid']),
         debtDate: _dt(j['debtDate']),
         dueDate: _dt(j['dueDate']),
-        items: (j['items'] as List).map((e) => DebtItem.fromJson(_asStringMap(e))).toList(),
+        items: _itemList(j['items']).map(DebtItem.fromJson).toList(),
       );
 }
 
@@ -270,17 +314,17 @@ class BusinessProfile {
         'photo': photo, 'qr': qr,
       };
   factory BusinessProfile.fromJson(Map<String, dynamic> j) => BusinessProfile(
-        ownerName: (j['ownerName'] as String?) ?? '',
-        storeName: (j['storeName'] as String?) ?? '',
-        businessType: (j['businessType'] as String?) ?? 'Sari-Sari Store',
-        phone: (j['phone'] as String?) ?? '',
-        address: (j['address'] as String?) ?? '',
-        city: (j['city'] as String?) ?? '',
-        province: (j['province'] as String?) ?? '',
-        postalCode: (j['postalCode'] as String?) ?? '',
-        tinNumber: (j['tinNumber'] as String?) ?? '',
-        photo: j['photo'] as String?,
-        qr: j['qr'] as String?,
+        ownerName: _str(j['ownerName']),
+        storeName: _str(j['storeName']),
+        businessType: j['businessType'] is String ? j['businessType'] as String : 'Sari-Sari Store',
+        phone: _str(j['phone']),
+        address: _str(j['address']),
+        city: _str(j['city']),
+        province: _str(j['province']),
+        postalCode: _str(j['postalCode']),
+        tinNumber: _str(j['tinNumber']),
+        photo: j['photo'] is String ? j['photo'] as String : null,
+        qr: j['qr'] is String ? j['qr'] as String : null,
       );
 }
 
@@ -295,10 +339,10 @@ class Account {
   Map<String, dynamic> toJson() =>
       {'fullName': fullName, 'username': username, 'email': email, 'passHash': passHash, 'dateOfBirth': dateOfBirth, 'gender': gender};
   factory Account.fromJson(Map<String, dynamic> j) => Account(
-      fullName: j['fullName'] as String,
-      username: j['username'] as String,
-      email: j['email'] as String,
-      passHash: j['passHash'] as String,
-      dateOfBirth: j['dateOfBirth'] as String?,
-      gender: j['gender'] as String?);
+      fullName: _str(j['fullName']),
+      username: _str(j['username']),
+      email: _str(j['email']),
+      passHash: _str(j['passHash']),
+      dateOfBirth: j['dateOfBirth'] is String ? j['dateOfBirth'] as String : null,
+      gender: j['gender'] is String ? j['gender'] as String : null);
 }

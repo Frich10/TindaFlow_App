@@ -118,6 +118,69 @@ class ReceiptValidator {
     return keys.where(t.contains).length >= 2;
   }
 
+  static const _months = {
+    'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+    'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
+    'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9, 'oct': 10,
+    'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12,
+  };
+
+  /// Collects every date that appears in [text] as (year, month, day).
+  /// Handles common receipt formats: "Nov 13, 2026", "13 Nov 2026",
+  /// "11/13/2026" or "13/11/2026", and "2026-11-13".
+  static List<DateTime> _extractDates(String text) {
+    final out = <DateTime>[];
+    void add(int? y, int? m, int? d) {
+      if (y == null || m == null || d == null) return;
+      if (m < 1 || m > 12 || d < 1 || d > 31) return;
+      try {
+        final dt = DateTime(y, m, d);
+        if (dt.month == m && dt.day == d) out.add(dt);
+      } catch (_) {}
+    }
+
+    final lower = text.toLowerCase();
+
+    // "Nov 13, 2026" / "November 13 2026"
+    final monthFirst = RegExp(r'\b([a-z]{3,9})\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})');
+    for (final m in monthFirst.allMatches(lower)) {
+      final mo = _months[m.group(1)];
+      if (mo != null) add(int.parse(m.group(3)!), mo, int.parse(m.group(2)!));
+    }
+
+    // "13 Nov 2026" / "13 November, 2026"
+    final dayFirst = RegExp(r'\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3,9}),?\s+(\d{4})');
+    for (final m in dayFirst.allMatches(lower)) {
+      final mo = _months[m.group(2)];
+      if (mo != null) add(int.parse(m.group(3)!), mo, int.parse(m.group(1)!));
+    }
+
+    // "2026-11-13" / "2026/11/13"
+    final ymd = RegExp(r'\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b');
+    for (final m in ymd.allMatches(lower)) {
+      add(int.parse(m.group(1)!), int.parse(m.group(2)!), int.parse(m.group(3)!));
+    }
+
+    // "11/13/2026" (MM/DD/YYYY) and "13/11/2026" (DD/MM/YYYY)
+    final slash = RegExp(r'\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b');
+    for (final m in slash.allMatches(lower)) {
+      var y = int.parse(m.group(3)!);
+      if (y < 100) y += 2000;
+      final a = int.parse(m.group(1)!);
+      final b = int.parse(m.group(2)!);
+      add(y, a, b); // MM/DD
+      add(y, b, a); // DD/MM
+    }
+    return out;
+  }
+
+  /// True only if [text] contains today's date. Used to block old receipts.
+  static bool _hasTodayDate(String text) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return _extractDates(text).any((d) => d == today);
+  }
+
   /// Reads the text on the receipt picture.
   /// Android / iOS: Google ML Kit on the phone. Web browser: ocr.space online reader.
   static Future<String> _readText(String path, Uint8List bytes) async {
@@ -161,7 +224,8 @@ class ReceiptValidator {
 
     final text = await _readText(path, bytes);
     // If the text cannot be read, the picture is blurry, too dark or not a receipt.
-    if (text.trim().length < 25) {
+    final trimmed = text.trim();
+    if (trimmed.length < 25 || trimmed.split(RegExp(r'\s+')).length < 4) {
       return fail('This is not a receipt, or it is too blurry to read. Please upload your GCash receipt or take a clear picture of it.');
     }
     if (!_looksLikeGcashReceipt(text)) {
@@ -176,7 +240,14 @@ class ReceiptValidator {
       }
       return fail('The reference number is wrong. It does not match the reference number on your receipt.');
     }
-    if (!RegExp(r'39[.,]00').hasMatch(text)) return fail('We could not find the ₱39.00 amount on the receipt.');
+    // Amount must be ₱39.00 — reject 139.00, 390.00, 39.000, etc.
+    if (!RegExp(r'(?<!\d)39[.,]0{1,2}(?!\d)').hasMatch(text)) {
+      return fail('We could not find the ₱39.00 amount on the receipt. Please upload your ₱39 GCash receipt.');
+    }
+    // Reject old receipts: the payment must be made today.
+    if (!_hasTodayDate(text)) {
+      return fail('This receipt is not from today. Please pay ₱39.00 today and upload today\'s GCash receipt.');
+    }
     final acct = digitsOf(PaymentConfig.accountNumber);
     if (acct.length >= 4 && !digitsOf(text).contains(acct.substring(acct.length - 4))) {
       return fail('This receipt does not show payment to our GCash account.');

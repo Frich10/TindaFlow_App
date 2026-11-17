@@ -7,12 +7,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
-import 'firebase_sync.dart';
 import 'models.dart';
 
 /// Free plan limits.
 const int kFreeProductLimit = 30;
 const int kFreeHistoryDays = 7;
+
+/// Outcome of a login attempt, so the UI can show an accurate message.
+enum LoginResult {
+  /// Logged in successfully.
+  success,
+
+  /// The server (or local cache) rejected the password for a real account.
+  wrongPassword,
+
+  /// No account exists for that email — it must be registered first.
+  noAccount,
+
+  /// Login failed for a reason that is not the credentials (offline, error).
+  failed,
+}
 
 /// One row in "Recent Transactions".
 class Activity {
@@ -51,6 +65,13 @@ class AppStore extends ChangeNotifier {
   bool onboardingSeen = false;
   bool skipItemDeleteConfirm = false;
 
+  /// Salted SHA-256 hash of the 6-digit MPIN. Null when no MPIN is set.
+  /// Stored locally only (device security).
+  String? mpinHash;
+  /// Runtime flag: true once the user has entered the correct MPIN this session.
+  /// Not persisted — reset to false on every cold start.
+  bool appUnlocked = false;
+
   BusinessProfile profile = BusinessProfile();
   double gcashOpening = 0;
   String plan = 'Free';
@@ -67,7 +88,13 @@ class AppStore extends ChangeNotifier {
   List<Debt> debts = [];
   final List<SaleItem> cart = [];
 
+  /// Extra product categories the user created via the "Others" option.
+  List<String> customCategories = [];
+
   bool get hasAccount => account != null;
+
+  /// True when an MPIN has been set by the user.
+  bool get hasMpin => mpinHash != null && mpinHash!.isNotEmpty;
 
   /// True while the Premium plan is active. Free users only get the basic features.
   bool get isPremium => plan == 'Premium';
@@ -90,6 +117,8 @@ class AppStore extends ChangeNotifier {
         account = null;
       }
     }
+    // MPIN is per-account: load it only after we know the account email.
+    mpinHash = _loadMpinHash();
     final raw = p.getString('data');
     if (raw != null) {
       try {
@@ -97,13 +126,10 @@ class AppStore extends ChangeNotifier {
       } catch (_) {/* corrupt data -> start clean */}
     }
     if (account == null) loggedIn = false;
-    if (account != null && loggedIn) {
-      firebaseSync.initForUser(account!.email, this);
-    }
   }
 
   List<T> _list<T>(dynamic v, T Function(Map<String, dynamic>) f) =>
-      ((v as List?) ?? []).map((e) => f(e as Map<String, dynamic>)).toList();
+      ((v as List?) ?? []).whereType<Map>().map((e) => f(_toStringDynamicMap(e as Map<Object?, Object?>))).toList();
 
   void _decode(Map<String, dynamic> j) {
     profile = BusinessProfile.fromJson((j['profile'] as Map<String, dynamic>?) ?? {});
@@ -119,96 +145,63 @@ class AppStore extends ChangeNotifier {
     gcash = _list(j['gcash'], GcashTx.fromJson);
     expenses = _list(j['expenses'], Expense.fromJson);
     debts = _list(j['debts'], Debt.fromJson);
+    customCategories = ((j['customCategories'] as List?) ?? [])
+        .map((e) => e.toString())
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
   }
 
-  bool _syncingFromCloud = false;
 
-  /// Applies data received from Firebase Realtime Database.
-  void applyRemoteData(Map<String, dynamic> j) {
-    if (_syncingFromCloud) return;
-    _syncingFromCloud = true;
-    try {
-      if (j.containsKey('account') && j['account'] is Map) {
-        account = Account.fromJson(_toStringDynamicMap(j['account'] as Map<Object?, Object?>));
-      }
-      if (j.containsKey('profile') && j['profile'] is Map) {
-        profile = BusinessProfile.fromJson(_toStringDynamicMap(j['profile'] as Map<Object?, Object?>));
-      }
-      if (j.containsKey('plan')) {
-        plan = (j['plan'] as String?) ?? 'Free';
-      }
-      subscriptionStart = j['subscriptionStart'] == null ? null : DateTime.parse(j['subscriptionStart'] as String);
-      subscriptionEnd = j['subscriptionEnd'] == null ? null : DateTime.parse(j['subscriptionEnd'] as String);
-      gcashOpening = ((j['gcashOpening'] as num?) ?? 0).toDouble();
-      products = _fromFirebase(j['products'], Product.fromJson);
-      sales = _fromFirebase(j['sales'], Sale.fromJson)
-        ..sort((a, b) => b.date.compareTo(a.date));
-      gcash = _fromFirebase(j['gcash'], GcashTx.fromJson)
-        ..sort((a, b) => b.date.compareTo(a.date));
-      expenses = _fromFirebase(j['expenses'], Expense.fromJson)
-        ..sort((a, b) => b.date.compareTo(a.date));
-      debts = _fromFirebase(j['debts'], Debt.fromJson);
-      moves = _fromFirebase(j['moves'], StockMove.fromJson)
-        ..sort((a, b) => a.date.compareTo(b.date));
-      _persist();
-      notifyListeners();
-    } catch (e) {
-      debugPrint('[AppStore] applyRemoteData error: $e');
-    } finally {
-      _syncingFromCloud = false;
-    }
-  }
-
-  List<T> _fromFirebase<T>(dynamic raw, T Function(Map<String, dynamic>) fromJson) {
-    if (raw == null) return [];
-    if (raw is Map) {
-      return raw.values
-          .whereType<Map>()
-          .map((e) => fromJson(_toStringDynamicMap(e as Map<Object?, Object?>)))
-          .toList();
-    }
-    if (raw is List) {
-      return raw
-          .whereType<Map>()
-          .map((e) => fromJson(_toStringDynamicMap(e as Map<Object?, Object?>)))
-          .toList();
-    }
-    return [];
-  }
 
   void _persist() {
     final p = _prefs;
     if (p == null) return;
-    p.setString(
-      'data',
-      jsonEncode({
-        'profile': profile.toJson(),
-        'gcashOpening': gcashOpening,
-        'plan': plan,
-        'subscriptionStart': subscriptionStart?.toIso8601String(),
-        'subscriptionEnd': subscriptionEnd?.toIso8601String(),
-        'lastAlertViewed': lastAlertViewed?.toIso8601String(),
-        'lastAlertHash': lastAlertHash,
-        'products': products.map((e) => e.toJson()).toList(),
-        'moves': moves.map((e) => e.toJson()).toList(),
-        'sales': sales.map((e) => e.toJson()).toList(),
-        'gcash': gcash.map((e) => e.toJson()).toList(),
-        'expenses': expenses.map((e) => e.toJson()).toList(),
-        'debts': debts.map((e) => e.toJson()).toList(),
-      }),
-    );
+    String encoded(bool includePhotos) => jsonEncode({
+          'profile': profile.toJson(),
+          'gcashOpening': gcashOpening,
+          'plan': plan,
+          'subscriptionStart': subscriptionStart?.toIso8601String(),
+          'subscriptionEnd': subscriptionEnd?.toIso8601String(),
+          'lastAlertViewed': lastAlertViewed?.toIso8601String(),
+          'lastAlertHash': lastAlertHash,
+          'products': products.map((e) {
+            final j = e.toJson();
+            if (!includePhotos) j['photo'] = null;
+            return j;
+          }).toList(),
+          'moves': moves.map((e) => e.toJson()).toList(),
+          'sales': sales.map((e) => e.toJson()).toList(),
+          'gcash': gcash.map((e) => e.toJson()).toList(),
+          'expenses': expenses.map((e) => e.toJson()).toList(),
+          'debts': debts.map((e) => e.toJson()).toList(),
+          'customCategories': customCategories,
+        });
+    try {
+      p.setString('data', encoded(true));
+    } catch (e) {
+      // Storage is full (common on web where the whole blob must fit in a few MB).
+      // Retry without base64 product photos.
+      debugPrint('[AppStore] persist full failed, retrying without photos: $e');
+      try {
+        p.setString('data', encoded(false));
+      } catch (e2) {
+        debugPrint('[AppStore] persist failed: $e2');
+      }
+    }
   }
 
   void _commit() {
     _persist();
-    if (account != null && !_syncingFromCloud) {
-      firebaseSync.saveStore(this);
-    }
     notifyListeners();
   }
 
   /// Call after mutating fields of [profile] directly.
   void saveProfile() => _commit();
+
+  /// Refreshes state from local storage.
+  Future<void> refresh() async {
+    notifyListeners();
+  }
 
   // ───────────────────────── auth ─────────────────────────
   String _hash(String pw) => sha256.convert(utf8.encode('tindaflow::$pw')).toString();
@@ -218,16 +211,25 @@ class AppStore extends ChangeNotifier {
     await _prefs?.setBool('onboarding', true);
   }
 
-  Future<void> signUp({
+  /// Creates a new account. Returns false when the email is already registered
+  /// locally, so the caller can show a duplicate-email error.
+  Future<bool> signUp({
     required String fullName,
     required String username,
     required String email,
     required String password,
   }) async {
+    final normalized = email.trim().toLowerCase();
+
+    // Local-only: reject if this device already holds that account.
+    if (account != null && account!.email == normalized) {
+      return false;
+    }
+
     account = Account(
       fullName: fullName.trim(),
       username: username.trim(),
-      email: email.trim().toLowerCase(),
+      email: normalized,
       passHash: _hash(password),
     );
     final first = fullName.trim().split(' ').first;
@@ -243,66 +245,126 @@ class AppStore extends ChangeNotifier {
     plan = 'Free';
     loggedIn = true;
     tab.value = 0;
+    appUnlocked = false;
+    mpinHash = _loadMpinHash();
     await _prefs?.setString('account', jsonEncode(account!.toJson()));
     await _prefs?.setBool('session', true);
     _commit();
-    firebaseSync.initForUser(account!.email, this);
-    firebaseSync.saveStore(this);
+    return true;
   }
 
-  bool login({required String username, required String email, required String password, required bool remember}) {
+  bool login({String? username, required String email, required String password, required bool remember}) {
     final a = account;
     if (a == null) return false;
-    final ok = a.username.toLowerCase() == username.trim().toLowerCase() &&
-        a.email == email.trim().toLowerCase() &&
+    final ok = a.email == email.trim().toLowerCase() &&
         a.passHash == _hash(password);
     if (!ok) return false;
     loggedIn = true;
     tab.value = 0;
+    appUnlocked = false;
+    mpinHash = _loadMpinHash();
     _prefs?.setBool('session', remember);
-    firebaseSync.initForUser(a.email, this);
-    firebaseSync.saveStore(this);
     notifyListeners();
     return true;
   }
 
-  /// Authenticates locally (offline) or remotely against Firebase Realtime Database.
-  Future<bool> loginAsync({
-    required String username,
+  /// Authenticates against the locally stored account.
+  ///
+  /// Returns a [LoginResult] describing the outcome so the UI can show an
+  /// accurate message ("no account" vs "wrong password").
+  Future<LoginResult> loginAsync({
+    String? username,
     required String email,
     required String password,
     required bool remember,
   }) async {
-    // 1. Try local offline login first
-    if (login(username: username, email: email, password: password, remember: remember)) {
-      return true;
-    }
-
-    // 2. Try remote Firebase login
-    final ok = await firebaseSync.remoteLogin(
-      username: username,
-      email: email,
-      passwordHash: _hash(password),
-      store: this,
-    );
-    if (ok) {
-      loggedIn = true;
-      tab.value = 0;
-      await _prefs?.setBool('session', remember);
-      await _prefs?.setString('account', jsonEncode(account!.toJson()));
-      _persist();
-      notifyListeners();
-      return true;
-    }
-    return false;
+    final normalized = email.trim().toLowerCase();
+    final a = account;
+    if (a == null || a.email != normalized) return LoginResult.noAccount;
+    if (a.passHash != _hash(password)) return LoginResult.wrongPassword;
+    login(email: normalized, password: password, remember: remember);
+    return LoginResult.success;
   }
 
   void logout() {
     loggedIn = false;
+    appUnlocked = false;
     cart.clear();
     tab.value = 0;
     _prefs?.setBool('session', false);
-    firebaseSync.disposeUser();
+    notifyListeners();
+  }
+
+  /// Permanently deletes this account and wipes the local session.
+  Future<bool> deleteAccount() async {
+    final a = account;
+    if (a == null) return false;
+    account = null;
+    loggedIn = false;
+    appUnlocked = false;
+    cart.clear();
+    tab.value = 0;
+    await _prefs?.remove('account');
+    await _prefs?.setBool('session', false);
+    notifyListeners();
+    return true;
+  }
+
+  // ───────────────────────── MPIN (app lock) ─────────────────────────
+  /// Validates that [pin] is exactly 6 digits. Returns an error message or null.
+  String? mpinError(String pin) {
+    if (pin.isEmpty) return 'Please enter a 6-digit MPIN';
+    if (!RegExp(r'^\d{6}$').hasMatch(pin)) return 'MPIN must be exactly 6 digits';
+    return null;
+  }
+
+  /// Per-account SharedPreferences key for the MPIN hash. Each account has its
+  /// own MPIN, so switching accounts never inherits another account's PIN.
+  String? _mpinKey() {
+    final email = account?.email;
+    if (email == null || email.trim().isEmpty) return null;
+    final safe = email.trim().toLowerCase().replaceAll(RegExp(r'[.#$\[\]/]'), '_');
+    return 'mpin_$safe';
+  }
+
+  String? _loadMpinHash() {
+    final k = _mpinKey();
+    if (k == null) return null;
+    return _prefs?.getString(k);
+  }
+
+  /// Sets (or replaces) the MPIN for the current account. Returns true on success.
+  bool setMpin(String pin) {
+    final err = mpinError(pin);
+    if (err != null) return false;
+    final k = _mpinKey();
+    if (k == null) return false;
+    mpinHash = _hash(pin);
+    appUnlocked = true;
+    _prefs?.setString(k, mpinHash!);
+    _persist();
+    notifyListeners();
+    return true;
+  }
+
+  /// Removes the MPIN for the current account (disables the app lock).
+  void removeMpin() {
+    final k = _mpinKey();
+    if (k != null) _prefs?.remove(k);
+    mpinHash = null;
+    _persist();
+    notifyListeners();
+  }
+
+  /// Verifies [pin] against the current account's stored MPIN hash.
+  bool verifyMpin(String pin) {
+    if (!hasMpin) return false;
+    return mpinHash == _hash(pin);
+  }
+
+  /// Marks the app as unlocked for this session (call after correct MPIN entry).
+  void unlockApp() {
+    appUnlocked = true;
     notifyListeners();
   }
 
@@ -311,19 +373,14 @@ class AppStore extends ChangeNotifier {
     if (a == null || a.passHash != _hash(current)) return false;
     a.passHash = _hash(next);
     _prefs?.setString('account', jsonEncode(a.toJson()));
-    firebaseSync.updateAccount(a);
     return true;
   }
 
   bool resetPassword(String email, String next) {
     final a = account;
-    if (a == null || a.email != email.trim().toLowerCase()) {
-      firebaseSync.remoteResetPassword(email, _hash(next));
-      return false;
-    }
+    if (a == null || a.email != email.trim().toLowerCase()) return false;
     a.passHash = _hash(next);
     _prefs?.setString('account', jsonEncode(a.toJson()));
-    firebaseSync.updateAccount(a);
     return true;
   }
 
@@ -332,19 +389,16 @@ class AppStore extends ChangeNotifier {
     if (a != null && a.email == email.trim().toLowerCase()) {
       a.passHash = _hash(next);
       await _prefs?.setString('account', jsonEncode(a.toJson()));
-      await firebaseSync.updateAccount(a);
       return true;
     }
-    return await firebaseSync.remoteResetPassword(email, _hash(next));
+    return false;
   }
 
   void updateEmail(String nextEmail) {
     final a = account;
     if (a == null) return;
-    final oldEmail = a.email;
     a.email = nextEmail.trim().toLowerCase();
     _prefs?.setString('account', jsonEncode(a.toJson()));
-    firebaseSync.migrateEmail(oldEmail, a.email, this);
     notifyListeners();
   }
 
@@ -358,9 +412,6 @@ class AppStore extends ChangeNotifier {
     cart.clear();
     gcashOpening = 0.0;
     _commit();
-    if (account != null) {
-      await firebaseSync.resetRemoteUserData(this);
-    }
   }
 
   // ───────────────────────── products / stock ─────────────────────────
@@ -369,6 +420,38 @@ class AppStore extends ChangeNotifier {
       if (p.id == id) return p;
     }
     return null;
+  }
+
+  /// Built-in categories plus any custom ones the user added.
+  /// "Others" is always kept at the end so custom categories appear before it.
+  List<String> get allCategories {
+    const others = 'Others';
+    final seen = <String>{};
+    final out = <String>[];
+    void add(String c) {
+      if (c.trim().isEmpty) return;
+      if (c == others) return;
+      if (seen.add(c.toLowerCase())) out.add(c);
+    }
+
+    for (final c in kProductCategories) {
+      add(c);
+    }
+    for (final c in customCategories) {
+      add(c);
+    }
+    out.add(others);
+    return out;
+  }
+
+  /// Remembers a newly typed category so it shows up in the dropdown next time.
+  void addCategory(String category) {
+    final c = category.trim();
+    if (c.isEmpty) return;
+    if (kProductCategories.contains(c)) return;
+    if (customCategories.any((e) => e.toLowerCase() == c.toLowerCase())) return;
+    customCategories.add(c);
+    _commit();
   }
 
   void _move(String id, int delta, String reason) {

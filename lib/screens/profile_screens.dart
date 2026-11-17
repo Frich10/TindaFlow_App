@@ -16,7 +16,7 @@ import 'about_screens.dart';
 import 'auth_screens.dart';
 import 'subscription_screens.dart';
 
-// ───────────────────────── Profile tab ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Profile tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
@@ -25,7 +25,7 @@ class ProfileTab extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: kCard,
         title: Text('Log out?', style: ts(15, w: FontWeight.w700)),
         content: Text('You will need to log in again to use TindaFlow.', style: ts(11)),
         actions: [
@@ -40,10 +40,10 @@ class ProfileTab extends StatelessWidget {
     );
     if (ok != true || !context.mounted) return;
     store.logout();
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (r) => false);
+    Navigator.of(context).pushAndRemoveUntil(AppPageRoute(builder: (_) => const LoginScreen()), (r) => false);
   }
 
-  void _go(BuildContext context, Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
+  void _go(BuildContext context, Widget w) => Navigator.of(context).push(AppPageRoute(builder: (_) => w));
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +117,7 @@ class ProfileTab extends StatelessWidget {
                 _Tile(Icons.settings_outlined, 'Account Settings', () => _go(context, const ProfileFormScreen(mode: ProfileMode.account))),
                 _Tile(Icons.qr_code_scanner, 'Gcash QR Code', () => _go(context, const GcashQrScreen())),
                 _Tile(Icons.monetization_on_outlined, 'Subscription', () => _go(context, const SubscriptionScreen())),
+                _Tile(Icons.help_outline, 'How It Works', () => _go(context, const HowItWorksScreen())),
                 _Tile(Icons.info_outline, 'About TindaFlow', () => _go(context, const AboutScreen())),
               ],
             ),
@@ -144,7 +145,7 @@ class _Tile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.white,
+        color: kCard,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -167,7 +168,7 @@ class _Tile extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Edit profile / business info / account ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Edit profile / business info / account â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 enum ProfileMode { edit, business, account }
 
@@ -230,7 +231,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
   Future<void> _clearData() async {
     final ok = await confirmDelete(context,
         title: 'Reset all data to zero?',
-        message: 'This removes every product, sale, debt, expense and GCash record both locally and in Firebase. Your account stays.');
+        message: 'This removes every product, sale, debt, expense and GCash record stored on this device. Your account stays.');
     if (ok && mounted) {
       await store.clearAllData();
       if (mounted) snack(context, 'All business data reset to zero');
@@ -273,8 +274,8 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
       onChanged: (v) => setState(() => _type = v ?? _type),
       bottomGap: 6,
     );
-    final phone = AppField(label: 'Phone Number', controller: _phone, hint: '09XXXXXXXXX', icon: null, keyboard: TextInputType.phone, validator: phoneError, bottomGap: 6);
-    final addr = AppField(label: 'Business Address', controller: _addr, hint: 'Store address', icon: Icons.location_on, maxLines: 2, bottomGap: 6);
+    final phone = AppField(label: 'Phone Number', controller: _phone, hint: '09XXXXXXXXX', icon: null, keyboard: TextInputType.phone, formatters: phoneFormatters, validator: phoneError, bottomGap: 6);
+    final addr = AppField(label: 'Business Address', controller: _addr, hint: 'Store address', icon: Icons.location_on, maxLines: 2, fieldHeight: 44, bottomGap: 12);
     final city = AppField(label: 'City / Municipality', controller: _city, hint: 'City / Municipality', icon: Icons.location_city, bottomGap: 6);
     final province = AppField(label: 'Province', controller: _province, hint: 'Province', icon: Icons.map, bottomGap: 6);
     final postalCode = AppField(label: 'Postal Code', controller: _postalCode, hint: 'Postal Code', icon: Icons.mark_email_unread_outlined, keyboard: TextInputType.number, bottomGap: 6);
@@ -290,7 +291,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     );
     final genderDropdown = AppDropdown(
       label: 'Gender',
-      items: ['Male', 'Female', 'Other', 'Prefer not to say'],
+      items: ['Male', 'Female', 'Prefer not to say'],
       value: _gender.text.isEmpty ? null : _gender.text,
       onChanged: (v) => setState(() => _gender.text = v ?? ''),
       bottomGap: 6,
@@ -425,28 +426,65 @@ case ProfileMode.edit:
           AppField(label: 'Username', controller: TextEditingController(text: store.account?.username ?? ''), hint: 'Username', readOnly: true, bottomGap: 6),
           dob,
           genderDropdown,
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           // Contact Information Section
           Text('Contact Information', style: ts(13, w: FontWeight.w700, c: kBlue)),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           phone,
           AppField(label: 'Email Address', controller: _email, hint: 'Email Address', keyboard: TextInputType.emailAddress, validator: emailError, bottomGap: 6),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           // Account Security Section
           Text('Account Security', style: ts(13, w: FontWeight.w700, c: kBlue)),
           const SizedBox(height: 8),
+          // MPIN (app lock) — above Change Password.
+          AnimatedBuilder(
+            animation: store,
+            builder: (context, _) {
+              final hasMpin = store.hasMpin;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Material(
+                  color: kCard,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => Navigator.of(context).push(AppPageRoute(builder: (_) => const MpinSetupScreen())),
+                    child: Container(
+                      height: 42,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: cardDeco(color: Colors.transparent, border: kFieldBorder),
+                      child: Row(children: [
+                        Icon(Icons.phonelink_lock, size: 18, color: kText),
+                        const SizedBox(width: 10),
+                        Text(hasMpin ? 'Change MPIN' : 'Create MPIN', style: ts(11, w: FontWeight.w600)),
+                        const Spacer(),
+                        if (hasMpin)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(color: kGreenTint, borderRadius: BorderRadius.circular(8)),
+                            child: Text('On', style: ts(9, w: FontWeight.w700, c: kGreen)),
+                          ),
+                        if (hasMpin) const SizedBox(width: 6),
+                        const Icon(Icons.chevron_right, size: 18, color: kBlue),
+                      ]),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
           Material(
-            color: Colors.white,
+            color: kCard,
             borderRadius: BorderRadius.circular(10),
             child: InkWell(
               borderRadius: BorderRadius.circular(10),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChangePasswordScreen())),
+              onTap: () => Navigator.of(context).push(AppPageRoute(builder: (_) => const ChangePasswordScreen())),
               child: Container(
                 height: 42,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: cardDeco(color: Colors.transparent, border: kFieldBorder),
                 child: Row(children: [
-                  const Icon(Icons.lock_outline, size: 18, color: kText),
+                  Icon(Icons.lock_outline, size: 18, color: kText),
                   const SizedBox(width: 10),
                   Text('Change Password', style: ts(11, w: FontWeight.w600)),
                   const Spacer(),
@@ -460,7 +498,7 @@ case ProfileMode.edit:
           Text('Reset Business Data', style: ts(13, w: FontWeight.w700, c: kRed)),
           const SizedBox(height: 10),
           Material(
-            color: Colors.white,
+            color: kCard,
             borderRadius: BorderRadius.circular(10),
             child: InkWell(
               borderRadius: BorderRadius.circular(10),
@@ -492,7 +530,7 @@ case ProfileMode.edit:
   }
 }
 
-// ───────────────────────── Gcash QR ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Gcash QR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class GcashQrImage extends StatelessWidget {
   const GcashQrImage(this.qr, {super.key, this.size = 180});
@@ -656,7 +694,7 @@ class _Mini extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Change password ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Change password â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -721,7 +759,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             child: Column(children: [
               Container(
                 width: 56, height: 56,
-                decoration: const BoxDecoration(color: kBlueTint, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: kBlueTint, shape: BoxShape.circle),
                 child: const Icon(Icons.lock, color: kBlue, size: 28),
               ),
               const SizedBox(height: 8),
@@ -743,10 +781,183 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             decoration: cardDeco(color: kBlueTint),
             child: Column(children: [
               _rule('At least 8 characters', n.length >= 8),
-              _rule('Includes a number', RegExp(r'[0-9]').hasMatch(n)),
-              _rule('Includes a capital letter', RegExp(r'[A-Z]').hasMatch(n)),
+              _rule('One uppercase letter (A-Z)', RegExp(r'[A-Z]').hasMatch(n)),
+              _rule('One lowercase letter (a-z)', RegExp(r'[a-z]').hasMatch(n)),
+              _rule('One number (0-9)', RegExp(r'[0-9]').hasMatch(n)),
+              _rule('One special character (@#\$!*)', RegExp(r'[@#$!*]').hasMatch(n)),
             ]),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ───────────────────────── MPIN setup (create / change / remove) ─────────────────────────
+
+class MpinSetupScreen extends StatefulWidget {
+  const MpinSetupScreen({super.key});
+  @override
+  State<MpinSetupScreen> createState() => _MpinSetupScreenState();
+}
+
+class _MpinSetupScreenState extends State<MpinSetupScreen> {
+  final _pin = TextEditingController();
+  final _conf = TextEditingController();
+  bool _hide = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pin.addListener(_refresh);
+    _conf.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _pin.removeListener(_refresh);
+    _conf.removeListener(_refresh);
+    _pin.dispose();
+    _conf.dispose();
+    super.dispose();
+  }
+
+  bool get _pinReady => _pin.text.length == 6;
+  bool get _confReady => _conf.text.length == 6;
+  bool get _match => _pinReady && _confReady && _pin.text == _conf.text;
+
+  Future<void> _save() async {
+    if (!_pinReady) {
+      snack(context, 'Enter all 6 digits');
+      return;
+    }
+    if (!_match) {
+      snack(context, 'MPINs do not match');
+      return;
+    }
+    setState(() => _saving = true);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    final ok = store.setMpin(_pin.text);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (ok) {
+      snack(context, 'MPIN saved');
+      Navigator.of(context).pop();
+    } else {
+      snack(context, 'MPIN must be exactly 6 digits');
+    }
+  }
+
+  Future<void> _remove() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: kCard,
+        title: Text('Remove MPIN?', style: ts(15, w: FontWeight.w700)),
+        content: Text(
+          'This disables the app lock. Anyone who opens TindaFlow will be able to access your dashboard without a PIN.',
+          style: ts(11),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: kRed),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    store.removeMpin();
+    snack(context, 'MPIN removed');
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasMpin = store.hasMpin;
+    return BluePage(
+      back: true,
+      title: hasMpin ? 'Change MPIN' : 'Create MPIN',
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        children: [
+          Center(
+            child: Column(children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(color: kBlueTint, shape: BoxShape.circle),
+                child: const Icon(Icons.phonelink_lock, color: kBlue, size: 28),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                hasMpin ? 'Update MPIN' : 'Create MPIN',
+                style: ts(15, w: FontWeight.w700, c: kBlue),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Set a 6-digit PIN to lock the app and protect your business data when you reopen TindaFlow.',
+                textAlign: TextAlign.center,
+                style: ts(9.5, c: kBlueDark, h: 1.5),
+              ),
+              const SizedBox(height: 22),
+            ]),
+          ),
+          Text('New MPIN', style: ts(11, w: FontWeight.w600, c: kBlueDark)),
+          const SizedBox(height: 8),
+          PinField(controller: _pin, obscure: _hide),
+          const SizedBox(height: 18),
+          Text('Confirm MPIN', style: ts(11, w: FontWeight.w600, c: kBlueDark)),
+          const SizedBox(height: 8),
+          PinField(controller: _conf, obscure: _hide),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _hide = !_hide),
+                child: Row(children: [
+                  Icon(
+                    _hide ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    size: 16,
+                    color: kBlue,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(_hide ? 'Show PINs' : 'Hide PINs', style: ts(11, w: FontWeight.w600, c: kBlue)),
+                ]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          if (_confReady && !_match)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                'MPINs do not match',
+                textAlign: TextAlign.center,
+                style: ts(10, w: FontWeight.w600, c: kRed),
+              ),
+            ),
+          SizedBox(
+            width: double.infinity,
+            child: _saving
+                ? const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: kBlue)))
+                : AppButton(hasMpin ? 'Update MPIN' : 'Save MPIN', onPressed: _match ? _save : null),
+          ),
+          if (hasMpin) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: AppButton('Remove MPIN', outlined: true, color: kRed, onPressed: _remove),
+            ),
+          ],
         ],
       ),
     );

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
@@ -18,12 +18,13 @@ const _catColor = <String, Color>{
   'Transportation': kPurple,
   'Groceries': kRed,
 };
-const _catBg = <String, Color>{
-  'Supplies': kBlueTint,
-  'Utilities': kGreenTint,
-  'Transportation': kPurpleTint,
-  'Groceries': kRedTint,
-};
+Color _catBgFor(String c) => {
+      'Supplies': kBlueTint,
+      'Utilities': kGreenTint,
+      'Transportation': kPurpleTint,
+      'Groceries': kRedTint,
+    }[c] ??
+    kBlueTint;
 
 const _paymentMethods = ['Cash', 'Gcash'];
 
@@ -49,12 +50,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           backgroundColor: kGreen,
           foregroundColor: Colors.white,
           shape: const CircleBorder(),
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExpenseFormScreen())),
+          onPressed: () => Navigator.of(context).push(AppPageRoute(builder: (_) => const ExpenseFormScreen())),
           child: const Icon(Icons.add),
         ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-          children: [
+        child: Refreshable(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
             Container(
               padding: const EdgeInsets.all(14),
               decoration: cardDeco(color: kOrangeTint, r: 12),
@@ -94,7 +97,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       height: 32,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: _catBg[c],
+                        color: _catBgFor(c),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: _cat == c ? _catColor[c]! : _catColor[c]!.withValues(alpha: 0.3), width: _cat == c ? 1.6 : 1),
                       ),
@@ -118,7 +121,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   : Column(children: [
                       for (final e in list)
                         InkWell(
-                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExpenseDetailScreen(expenseId: e.id))),
+                          onTap: () => Navigator.of(context).push(AppPageRoute(builder: (_) => ExpenseDetailScreen(expenseId: e.id))),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 9),
                             child: Row(children: [
@@ -137,13 +140,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     ]),
             ),
           ],
+          ),
         ),
       );
     });
   }
 }
 
-// ───────────────────────── Expense details ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Expense details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ExpenseDetailScreen extends StatelessWidget {
   const ExpenseDetailScreen({super.key, required this.expenseId});
@@ -160,7 +164,7 @@ class ExpenseDetailScreen extends StatelessWidget {
         back: true,
         title: 'Expense Details',
         actions: [
-          HeaderIcon(Icons.edit, onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExpenseFormScreen(expense: e)))),
+          HeaderIcon(Icons.edit, onTap: () => Navigator.of(context).push(AppPageRoute(builder: (_) => ExpenseFormScreen(expense: e)))),
           HeaderIcon(Icons.delete_outline, onTap: () async {
             final ok = await confirmDelete(context);
             if (ok && context.mounted) {
@@ -185,7 +189,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                     Text(peso(e.amount, decimals: true), style: ts(13, w: FontWeight.w700)),
                   ]),
                 ),
-                StatusChip(e.category, color: _catColor[e.category] ?? kBlue, bg: _catBg[e.category] ?? kBlueTint),
+                                StatusChip(e.category, color: _catColor[e.category] ?? kBlue, bg: _catBgFor(e.category)),
               ]),
             ),
             const SizedBox(height: 14),
@@ -243,7 +247,7 @@ class _Row extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Add / edit expense ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Add / edit expense â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ExpenseFormScreen extends StatefulWidget {
   const ExpenseFormScreen({super.key, this.expense});

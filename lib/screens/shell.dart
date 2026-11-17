@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
@@ -13,7 +13,8 @@ import 'sales_screens.dart';
 import 'stock_screens.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  const MainShell({super.key, this.showBootLoader = false});
+  final bool showBootLoader;
   @override
   State<MainShell> createState() => _MainShellState();
 }
@@ -23,6 +24,30 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     subscription.ensureLoaded(); // ends an expired Premium plan as soon as the app opens
+    if (widget.showBootLoader) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showBootLoader());
+    }
+  }
+
+  Future<void> _showBootLoader() async {
+    final overlay = Overlay.of(context);
+    final entry = OverlayEntry(
+      builder: (c) => const Positioned.fill(
+        child: Material(
+          color: Colors.black26,
+          child: Center(
+            child: SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(color: kBlue, strokeWidth: 3),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    await Future.delayed(const Duration(milliseconds: 1000));
+    entry.remove();
   }
 
   @override
@@ -59,7 +84,7 @@ class _NavBar extends StatelessWidget {
     ];
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: kCard,
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, -2))],
       ),
       child: SafeArea(
@@ -86,9 +111,7 @@ class _NavBar extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Home ─────────────────────────
-
-void _go(BuildContext context, Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Home â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class HomeTab extends StatelessWidget {
   const HomeTab({super.key});
@@ -104,7 +127,7 @@ class HomeTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 10, 6, 14),
           child: Row(children: [
             GestureDetector(
-              onTap: () => _go(context, const ProfileTab()),
+              onTap: () => store.tab.value = 4,
               child: Builder(
                 builder: (context) {
                   final photo = store.profile.photo;
@@ -142,9 +165,11 @@ class HomeTab extends StatelessWidget {
             Watch((context) => HeaderIcon(Icons.notifications, badge: store.hasAlerts, onTap: () => showAlerts(context))),
           ]),
         ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          children: [
+        child: Refreshable(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
             Row(children: [
               Expanded(child: _Summary(Icons.shopping_cart, 'Total Sales', peso(store.totalSales), kGreen, kGreenTint)),
               const SizedBox(width: 10),
@@ -152,7 +177,7 @@ class HomeTab extends StatelessWidget {
             ]),
             const SizedBox(height: 10),
             Row(children: [
-              Expanded(child: _lockable(context, !prem, 'Income & expense tracking', _Summary(Icons.receipt_long, 'Total Expenses', peso(store.totalExpenses), kOrange, kOrangeTint, locked: !prem))),
+              Expanded(child: _lockable(context, !prem, 'Income & expense tracking', _Summary(Icons.receipt_long, 'Total Expenses', peso(store.totalExpenses), kOrange, kOrangeTint, locked: !prem, image: 'assets/images/expense_icon.png'))),
               const SizedBox(width: 10),
               Expanded(child: _lockable(context, !prem, 'GCash cash-in / cash-out recording', _Summary(null, 'Gcash Balance', peso(store.gcashBalance), kBlue, kBlueTint, locked: !prem))),
             ]),
@@ -164,7 +189,7 @@ class HomeTab extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(child: _Quick(null, 'Gcash', kBlue, () {
                 if (requirePremium(context, 'GCash cash-in / cash-out recording')) {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GcashScreen()));
+                  Navigator.of(context).push(AppPageRoute(builder: (_) => const GcashScreen()));
                 }
               }, locked: !prem)),
             ]),
@@ -172,7 +197,7 @@ class HomeTab extends StatelessWidget {
             Row(children: [
               Expanded(child: _Quick(Icons.receipt_long, 'Expense', kOrange, () {
                 if (requirePremium(context, 'Income & expense tracking')) {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExpensesScreen()));
+                  Navigator.of(context).push(AppPageRoute(builder: (_) => const ExpensesScreen()));
                 }
               }, locked: !prem)),
               const SizedBox(width: 10),
@@ -185,7 +210,7 @@ class HomeTab extends StatelessWidget {
               Text('Recent Transactions', style: ts(12, w: FontWeight.w700, c: kBlue)),
               const Spacer(),
               GestureDetector(
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AllActivityScreen())),
+                onTap: () => Navigator.of(context).push(AppPageRoute(builder: (_) => const AllActivityScreen())),
                 child: Text('View All', style: ts(10, w: FontWeight.w700, c: kBlue)),
               ),
             ]),
@@ -198,6 +223,7 @@ class HomeTab extends StatelessWidget {
                   : Column(children: [for (final a in recent) ActivityTile(a)]),
             ),
           ],
+          ),
         ),
       );
     });
@@ -205,13 +231,14 @@ class HomeTab extends StatelessWidget {
 }
 
 class _Summary extends StatelessWidget {
-  const _Summary(this.icon, this.label, this.value, this.color, this.bg, {this.locked = false});
+  const _Summary(this.icon, this.label, this.value, this.color, this.bg, {this.locked = false, this.image});
   final bool locked;
   final IconData? icon;
   final String label;
   final String value;
   final Color color;
   final Color bg;
+  final String? image;
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -219,7 +246,23 @@ class _Summary extends StatelessWidget {
       decoration: cardDeco(color: bg, border: color.withValues(alpha: 0.45)),
       child: Row(children: [
         
-      icon == null
+      image != null
+          ? Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Image.asset(
+                image!,
+                width: 18,
+                height: 18,
+                fit: BoxFit.contain,
+              ),
+            )
+          : icon == null
           ? Container(
               width: 26,
               height: 26,

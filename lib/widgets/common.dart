@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +11,19 @@ import '../data/store.dart';
 import '../data/subscription_service.dart';
 import '../screens/subscription_screens.dart';
 
-// ───────────────────────── helpers ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+/// A [AppPageRoute] with a longer (0.5s) transition so screen changes
+/// feel less abrupt.
+class AppPageRoute<T> extends MaterialPageRoute<T> {
+  AppPageRoute({required super.builder, super.fullscreenDialog, super.maintainState});
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 500);
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 500);
+}
 
 /// Rebuilds whenever the global [store] changes.
 class Watch extends StatelessWidget {
@@ -20,6 +32,18 @@ class Watch extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       ListenableBuilder(listenable: store, builder: (c, _) => builder(c));
+}
+
+/// Wraps a scrollable with pull-to-refresh.
+class Refreshable extends StatelessWidget {
+  const Refreshable({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => RefreshIndicator(
+        onRefresh: () => store.refresh(),
+        color: kBlue,
+        child: child,
+      );
 }
 
 void snack(BuildContext context, String msg) {
@@ -84,8 +108,45 @@ DateTime combine(DateTime d, TimeOfDay t) => DateTime(d.year, d.month, d.day, t.
 String? passwordError(String? v) {
   if (v == null || v.isEmpty) return 'Required';
   if (v.length < 8) return 'At least 8 characters';
-  if (!RegExp(r'[0-9]').hasMatch(v)) return 'Include a number';
-  if (!RegExp(r'[A-Z]').hasMatch(v)) return 'Include a capital letter';
+  if (!RegExp(r'[A-Z]').hasMatch(v)) return 'Include an uppercase letter (A-Z)';
+  if (!RegExp(r'[a-z]').hasMatch(v)) return 'Include a lowercase letter (a-z)';
+  if (!RegExp(r'[0-9]').hasMatch(v)) return 'Include a number (0-9)';
+  if (!RegExp(r'[@#$!*]').hasMatch(v)) return 'Include a special character (@#\$!*)';
+  return null;
+}
+
+/// Live checklist showing which password rules the current text satisfies.
+class PasswordRules extends StatelessWidget {
+  const PasswordRules(this.password, {super.key});
+  final String password;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget rule(String t, bool ok) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(children: [
+            Icon(Icons.check_circle, size: 15, color: ok ? kGreen : const Color(0xFFC5CFDD)),
+            const SizedBox(width: 8),
+            Text(t, style: ts(10)),
+          ]),
+        );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: cardDeco(color: kBlueTint),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        rule('At least 8 characters', password.length >= 8),
+        rule('One uppercase letter (A-Z)', RegExp(r'[A-Z]').hasMatch(password)),
+        rule('One lowercase letter (a-z)', RegExp(r'[a-z]').hasMatch(password)),
+        rule('One number (0-9)', RegExp(r'[0-9]').hasMatch(password)),
+        rule('One special character (@#\$!*)', RegExp(r'[@#$!*]').hasMatch(password)),
+      ]),
+    );
+  }
+}
+
+String? requiredError(String? v) {
+  if (v == null || v.trim().isEmpty) return 'Required';
   return null;
 }
 
@@ -97,7 +158,10 @@ String? emailError(String? v) {
 
 String? phoneError(String? v) {
   if (v == null || v.trim().isEmpty) return 'Required';
-  if (v.replaceAll(RegExp(r'\D'), '').length < 7) return 'Enter a valid phone number';
+  // Count digits and bullet masks as significant chars (masked GCash numbers
+  // like "09•• ••• 4567" have hidden digits shown as bullets).
+  final significant = v.replaceAll(RegExp(r'[^0-9•·]'), '').length;
+  if (significant < 7) return 'Enter a valid phone number';
   return null;
 }
 
@@ -111,8 +175,51 @@ String? moneyError(String? v, {bool allowZero = false}) {
 
 final List<TextInputFormatter> moneyFormatters = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))];
 final List<TextInputFormatter> digitFormatters = [FilteringTextInputFormatter.digitsOnly];
+final List<TextInputFormatter> phoneFormatters = [
+  FilteringTextInputFormatter.digitsOnly,
+  LengthLimitingTextInputFormatter(11),
+];
 
-// ───────────────────────── page scaffold ─────────────────────────
+/// GCash phone formatter: allows digits, bullet masks and spaces/dashes, and
+/// limits the total to 11 significant characters (digits + bullets).
+final List<TextInputFormatter> gcashPhoneFormatters = [_GcashPhoneFormatter()];
+
+class _GcashPhoneFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    // Keep digits, bullets and spaces/dashes; drop everything else.
+    final filtered = newValue.text.replaceAll(RegExp(r'[^0-9•·\s-]'), '');
+    // Count significant chars (digits + bullets, excluding spaces/dashes).
+    final significant = filtered.replaceAll(RegExp(r'[\s-]'), '');
+    final clipped = significant.length > 11 ? significant.substring(0, 11) : significant;
+    // Preserve the original spacing pattern only if within the 11-char limit.
+    final out = significant.length > 11 ? clipped : filtered;
+    return TextEditingValue(
+      text: out,
+      selection: TextSelection.collapsed(offset: out.length),
+    );
+  }
+}
+
+/// Formats a GCash reference number as `0000 000 000000` (13 digits) while typing.
+final List<TextInputFormatter> refFormatters = [_RefFormatter()];
+
+class _RefFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final d = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final t = d.length > 13 ? d.substring(0, 13) : d;
+    final b = StringBuffer();
+    for (var i = 0; i < t.length; i++) {
+      if (i == 4 || i == 7) b.write(' ');
+      b.write(t[i]);
+    }
+    final out = b.toString();
+    return TextEditingValue(text: out, selection: TextSelection.collapsed(offset: out.length));
+  }
+}
+
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ page scaffold â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Blue header + rounded light body, used by every screen.
 class BluePage extends StatelessWidget {
@@ -125,7 +232,7 @@ class BluePage extends StatelessWidget {
     required this.child,
     this.fab,
     this.onBack,
-    this.bodyColor = kBg,
+    this.bodyColor,
   });
   final String? title;
   final Widget? header;
@@ -134,10 +241,11 @@ class BluePage extends StatelessWidget {
   final Widget child;
   final Widget? fab;
   final VoidCallback? onBack;
-  final Color bodyColor;
+  final Color? bodyColor;
 
   @override
   Widget build(BuildContext context) {
+    final bg = bodyColor ?? kBg;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -150,7 +258,7 @@ class BluePage extends StatelessWidget {
               width: double.infinity,
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: bodyColor,
+                color: bg,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
               ),
               child: child,
@@ -213,7 +321,7 @@ class HeaderIcon extends StatelessWidget {
   }
 }
 
-// ───────────────────────── buttons ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class AppButton extends StatelessWidget {
   const AppButton(
@@ -289,11 +397,11 @@ class CircleAdd extends StatelessWidget {
   }
 }
 
-// ───────────────────────── inputs ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ inputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 InputDecoration fieldDeco({String? hint, IconData? icon, String? prefixText, Widget? suffix}) {
-  const border = OutlineInputBorder(
-    borderRadius: BorderRadius.all(Radius.circular(10)),
+  final border = OutlineInputBorder(
+    borderRadius: const BorderRadius.all(Radius.circular(10)),
     borderSide: BorderSide(color: kFieldBorder, width: 1),
   );
   return InputDecoration(
@@ -360,6 +468,7 @@ class AppField extends StatelessWidget {
     this.showLabel = true,
     this.bottomGap = 12,
     this.fieldHeight = 48,
+    this.focusNode,
   });
   final String label;
   final String? hint;
@@ -379,6 +488,7 @@ class AppField extends StatelessWidget {
   final bool showLabel;
   final double bottomGap;
   final double fieldHeight;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -388,6 +498,7 @@ class AppField extends StatelessWidget {
         height: fieldHeight,
         child: TextFormField(
           controller: controller,
+          focusNode: focusNode,
           keyboardType: keyboard,
           readOnly: readOnly,
           onTap: onTap,
@@ -406,6 +517,139 @@ class AppField extends StatelessWidget {
   }
 }
 
+/// A 6-box PIN input. One transparent [TextField] drives six visual boxes so
+/// paste / backspace / autofill all work. [obscure] shows bullets instead of
+/// digits. Tapping anywhere focuses the field.
+class PinField extends StatefulWidget {
+  const PinField({
+    super.key,
+    required this.controller,
+    this.obscure = true,
+    this.boxWidth = 44,
+    this.boxHeight = 52,
+    this.gap = 8,
+    this.activeColor = kBlue,
+    this.filledColor = kBlueTint,
+    this.emptyColor = Colors.white,
+    this.borderColor = kFieldBorder,
+  });
+  final TextEditingController controller;
+  final bool obscure;
+  final double boxWidth;
+  final double boxHeight;
+  final double gap;
+  final Color activeColor;
+  final Color filledColor;
+  final Color emptyColor;
+  final Color borderColor;
+
+  @override
+  State<PinField> createState() => _PinFieldState();
+}
+
+class _PinFieldState extends State<PinField> {
+  final FocusNode _focus = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() => setState(() => _focused = _focus.hasFocus));
+    widget.controller.addListener(_onChanged);
+    _onChanged();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(() {});
+    _focus.dispose();
+    widget.controller.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.controller.text;
+    // The Stack must have an explicit height: a bare Stack inside a dialog's
+    // IntrinsicWidth has no bounded height, and Positioned.fill cannot size it,
+    // which throws a layout assertion and leaves the dialog blank.
+    return GestureDetector(
+      onTap: () => _focus.requestFocus(),
+      child: SizedBox(
+        height: widget.boxHeight,
+        child: Stack(
+          children: [
+          // The real input: transparent text + no decoration, full width.
+          Positioned.fill(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: _focus,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              maxLength: 6,
+              obscureText: widget.obscure,
+              cursorColor: Colors.transparent,
+              cursorWidth: 0,
+              enableInteractiveSelection: false,
+              style: const TextStyle(color: Colors.transparent, fontSize: 1, height: 0.01),
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                counterText: '',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          // Six visual boxes — responsive so they never overflow narrow dialogs.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final gap = widget.gap;
+              // Fit 6 boxes + 5 gaps within the available width, capped at the
+              // requested box width so wide screens don't get oversized boxes.
+              final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : widget.boxWidth * 6 + gap * 5;
+              final fitW = ((maxW - gap * 5) / 6).clamp(24.0, widget.boxWidth);
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(6, (i) {
+                  final has = i < text.length;
+                  final isNext = i == text.length && _focused;
+                  final ch = has ? (widget.obscure ? '•' : text[i]) : '';
+                  return Container(
+                    width: fitW,
+                    height: widget.boxHeight,
+                    margin: EdgeInsets.only(right: i == 5 ? 0 : gap),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: has ? widget.filledColor : widget.emptyColor,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isNext ? widget.activeColor : widget.borderColor,
+                        width: isNext ? 1.8 : 1,
+                      ),
+                    ),
+                    child: Text(
+                      ch,
+                      style: ts(20, w: FontWeight.w700, c: widget.activeColor),
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+        ],
+      ),
+      ),
+    );
+  }
+}
+
 class AppDropdown extends StatelessWidget {
   const AppDropdown({
     super.key,
@@ -416,6 +660,7 @@ class AppDropdown extends StatelessWidget {
     this.hint = 'Select',
     this.required = true,
     this.bottomGap = 12,
+    this.fieldHeight = 48,
   });
   final String label;
   final List<String> items;
@@ -424,23 +669,27 @@ class AppDropdown extends StatelessWidget {
   final String hint;
   final bool required;
   final double bottomGap;
+  final double fieldHeight;
 
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       fieldLabel(label, required),
       const SizedBox(height: 6),
-      DropdownButtonFormField<String>(
-        initialValue: items.contains(value) ? value : null,
-        isExpanded: true,
-        icon: const Icon(Icons.keyboard_arrow_down, color: kBlue),
-        decoration: fieldDeco(),
-        hint: Text(hint, style: ts(11, c: const Color(0xFFB4BFCF))),
-        items: [
-          for (final i in items) DropdownMenuItem<String>(value: i, child: Text(i, style: ts(12))),
-        ],
-        onChanged: onChanged,
-        validator: required ? (v) => v == null ? 'Required' : null : null,
+      SizedBox(
+        height: fieldHeight,
+        child: DropdownButtonFormField<String>(
+          initialValue: items.contains(value) ? value : null,
+          isExpanded: true,
+          icon: const Icon(Icons.keyboard_arrow_down, color: kBlue),
+          decoration: fieldDeco(),
+          hint: Text(hint, style: ts(11, c: const Color(0xFFB4BFCF))),
+          items: [
+            for (final i in items) DropdownMenuItem<String>(value: i, child: Text(i, style: ts(12))),
+          ],
+          onChanged: onChanged,
+          validator: required ? (v) => v == null ? 'Required' : null : null,
+        ),
       ),
       SizedBox(height: bottomGap),
     ]);
@@ -475,7 +724,7 @@ class SearchBox extends StatelessWidget {
           border: InputBorder.none,
           hintText: hint,
           hintStyle: ts(11, c: const Color(0xFFB4BFCF)),
-          prefixIcon: const Icon(
+          prefixIcon: Icon(
             Icons.search,
             size: 20,
             color: kMuted,
@@ -491,7 +740,7 @@ class SearchBox extends StatelessWidget {
   }
 }
 
-// ───────────────────────── chips / tabs ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ chips / tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SegmentTabs extends StatelessWidget {
   const SegmentTabs({super.key, required this.options, required this.selected, required this.onChanged});
@@ -562,21 +811,23 @@ class ChipsRow extends StatelessWidget {
 }
 
 class StatusChip extends StatelessWidget {
-  const StatusChip(this.text, {super.key, this.color = kGreen, this.bg = kGreenTint});
+  const StatusChip(this.text, {super.key, this.color, this.bg});
   final String text;
-  final Color color;
-  final Color bg;
+  final Color? color;
+  final Color? bg;
   @override
   Widget build(BuildContext context) {
+    final c = color ?? kGreen;
+    final background = bg ?? kGreenTint;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: ts(9, w: FontWeight.w600, c: color)),
+      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(6)),
+      child: Text(text, style: ts(9, w: FontWeight.w600, c: c)),
     );
   }
 }
 
-// ───────────────────────── visual bits ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ visual bits â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class GIcon extends StatelessWidget {
   const GIcon({super.key, this.size = 30, this.light = false});
@@ -843,7 +1094,7 @@ class ActivityTile extends StatelessWidget {
   }
 }
 
-// ───────────────────────── dialogs ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ dialogs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 Future<bool> confirmDelete(
   BuildContext context, {
@@ -853,7 +1104,7 @@ Future<bool> confirmDelete(
   final r = await showDialog<bool>(
     context: context,
     builder: (c) => Dialog(
-      backgroundColor: Colors.white,
+      backgroundColor: kCard,
       insetPadding: const EdgeInsets.symmetric(horizontal: 48),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
@@ -884,7 +1135,7 @@ void showAlerts(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.white,
+    backgroundColor: kCard,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (c) {
       final low = store.lowStockProducts;
@@ -953,10 +1204,10 @@ class FormBody extends StatelessWidget {
   }
 }
 
-// ───────────────────────── Premium gate ─────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Premium gate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 void _openSubscription(BuildContext context) {
-  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+  Navigator.of(context).push(AppPageRoute(builder: (_) => const SubscriptionScreen()));
 }
 
 /// "You need to subscribe first" modal. The Subscribe button opens the Subscription screen.
@@ -964,7 +1215,7 @@ Future<void> showPremiumModal(BuildContext context, {required String feature, St
   return showDialog<void>(
     context: context,
     builder: (c) => Dialog(
-      backgroundColor: Colors.white,
+      backgroundColor: kCard,
       insetPadding: const EdgeInsets.symmetric(horizontal: 40),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
@@ -1025,7 +1276,7 @@ class PremiumLockedView extends StatelessWidget {
           Container(
             width: 64,
             height: 64,
-            decoration: const BoxDecoration(color: kBlueTint, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: kBlueTint, shape: BoxShape.circle),
             child: const Icon(Icons.lock_outline, color: kBlue, size: 32),
           ),
           const SizedBox(height: 14),
